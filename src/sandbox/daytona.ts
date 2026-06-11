@@ -25,7 +25,7 @@ import type {
   ExecResult,
   SandboxHandle,
   SandboxRunner,
-} from "./runner.js";
+} from "./runner";
 
 /** Convert an optional millisecond timeout to the SDK's whole-second timeout. */
 function toTimeoutSeconds(timeoutMs?: number): number | undefined {

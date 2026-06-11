@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { LocalSandboxRunner, type SandboxHandle, cloneRepo } from "../src/sandbox/index.js";
+import { LocalSandboxRunner, type SandboxHandle, cloneRepo } from "../src/sandbox/index";
 
 /**
  * Exercise the LocalSandboxRunner end to end — no network or external service.

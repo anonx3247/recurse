@@ -5,13 +5,13 @@
  * and {@link getSandboxRunner} from here — never a concrete backend.
  */
 
-export * from "./runner.js";
-export { LocalSandboxRunner } from "./local.js";
-export { DaytonaSandboxRunner } from "./daytona.js";
+export * from "./runner";
+export { LocalSandboxRunner } from "./local";
+export { DaytonaSandboxRunner } from "./daytona";
 
-import { DaytonaSandboxRunner } from "./daytona.js";
-import { LocalSandboxRunner } from "./local.js";
-import type { SandboxRunner } from "./runner.js";
+import { DaytonaSandboxRunner } from "./daytona";
+import { LocalSandboxRunner } from "./local";
+import type { SandboxRunner } from "./runner";
 
 /**
  * Select a sandbox backend from the environment: Daytona when
