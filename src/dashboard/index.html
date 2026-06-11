@@ -379,52 +379,86 @@
         ctx.fill();
       }
 
-      async function renderCharts(project) {
+      // Per-section signatures: skip DOM work when the relevant slice is unchanged.
+      const sigs = {};
+      function changed(key, value) {
+        const s = JSON.stringify(value);
+        if (sigs[key] === s) return false;
+        sigs[key] = s;
+        return true;
+      }
+
+      // Create one canvas per metric ONCE; rebuild only when the metric set changes.
+      const charts = new Map(); // key -> { canvas, spec, latestNode, series, sig }
+      function ensureCharts(metrics) {
+        if (
+          !changed(
+            "metricSet",
+            metrics.map((m) => m.key),
+          )
+        )
+          return;
         const host = document.getElementById("charts");
         host.innerHTML = "";
-        for (const spec of project.metrics || []) {
-          const samples = await api(
-            `/api/metrics?projectId=${projectId}&key=${encodeURIComponent(spec.key)}`,
-          );
+        charts.clear();
+        if (!metrics.length) {
+          host.append(el("div", { class: "empty", text: "no metrics declared" }));
+          return;
+        }
+        for (const spec of metrics) {
           const canvas = el("canvas");
-          const latest = samples.length ? samples[samples.length - 1].value : "—";
+          const latestNode = el("div", { class: "latest", text: "latest: —" });
           host.append(
             el(
               "div",
               { class: "chart" },
               el("h3", { text: `${spec.label} (${spec.direction})` }),
-              el("div", {
-                class: "latest",
-                text: `latest: ${latest}${spec.unit ? " " + spec.unit : ""}`,
-              }),
+              latestNode,
               canvas,
             ),
           );
-          drawChart(canvas, samples, spec);
+          charts.set(spec.key, { canvas, spec, latestNode, series: [], sig: null });
         }
-        if (!(project.metrics || []).length)
-          host.append(el("div", { class: "empty", text: "no metrics declared" }));
       }
 
-      // ── state panels ────────────────────────────────────────────────────
-      function renderCounts(c) {
-        const host = document.getElementById("counts");
-        host.innerHTML = "";
-        for (const [label, key] of [
-          ["queued", "queued"],
-          ["running", "running"],
-          ["done", "done"],
-          ["failed", "failed"],
-        ]) {
-          host.append(
-            el(
-              "div",
-              { class: "c" },
-              el("div", { class: "n", text: String(c[key] ?? 0) }),
-              el("div", { class: "l", text: label }),
-            ),
-          );
+      // Re-fetch each series and redraw ONLY when it changed (count + last sample).
+      function updateCharts() {
+        for (const st of charts.values()) {
+          api(`/api/metrics?projectId=${projectId}&key=${encodeURIComponent(st.spec.key)}`)
+            .then((samples) => {
+              const last = samples[samples.length - 1];
+              const sig = `${samples.length}:${last ? (last.id ?? last.recordedAt) : ""}`;
+              if (sig === st.sig) return;
+              st.sig = sig;
+              st.series = samples;
+              const latest = samples.length ? last.value : "—";
+              st.latestNode.textContent = `latest: ${latest}${st.spec.unit ? " " + st.spec.unit : ""}`;
+              drawChart(st.canvas, samples, st.spec);
+            })
+            .catch(() => {});
         }
+      }
+
+      // Redraw cached series on resize so charts stay crisp without a data poll.
+      window.addEventListener("resize", () => {
+        for (const st of charts.values()) {
+          if (st.series.length) drawChart(st.canvas, st.series, st.spec);
+        }
+      });
+
+      // ── state panels ────────────────────────────────────────────────────
+      const COUNT_KEYS = ["queued", "running", "done", "failed"];
+      const countNodes = {};
+      function initCounts() {
+        const host = document.getElementById("counts");
+        for (const key of COUNT_KEYS) {
+          const n = el("div", { class: "n", text: "0" });
+          countNodes[key] = n;
+          host.append(el("div", { class: "c" }, n, el("div", { class: "l", text: key })));
+        }
+      }
+      function renderCounts(c) {
+        for (const key of COUNT_KEYS) countNodes[key].textContent = String(c[key] ?? 0);
       }
 
       function fmtDelta(change) {
@@ -435,7 +469,9 @@
           .join(", ");
       }
 
+      // No focusable inputs here, so a full rebuild is fine — but only on change.
       function renderChanges(changes) {
+        if (!changed("changes", changes)) return;
         const body = document.querySelector("#changes tbody");
         body.innerHTML = "";
         if (!changes.length) {
@@ -459,26 +495,46 @@
       }
 
       function renderRuns(runs) {
-        const host = document.getElementById("runs");
-        host.textContent = runs.length
+        const text = runs.length
           ? `${runs.length} in-flight: ` + runs.map((r) => r.role).join(", ")
           : "no agents running";
+        const host = document.getElementById("runs");
+        if (host.textContent !== text) host.textContent = text;
       }
 
       function renderPointers(pointers) {
+        if (
+          !changed(
+            "pointers",
+            pointers.map((p) => p.id),
+          )
+        )
+          return;
         const host = document.getElementById("pointers");
         host.innerHTML = "";
         for (const p of pointers) host.append(el("li", { text: p.body }));
       }
 
+      // Keyed by question id: add new, remove gone, and NEVER recreate existing
+      // nodes — so focus and any in-progress typed answer survive refreshes.
+      const questionNodes = new Map(); // id -> root element
       function renderQuestions(questions) {
         const host = document.getElementById("questions");
-        host.innerHTML = "";
+        const live = new Set(questions.map((q) => q.id));
+        for (const [id, node] of questionNodes) {
+          if (!live.has(id)) {
+            node.remove();
+            questionNodes.delete(id);
+          }
+        }
+        const empty = host.querySelector(".empty");
         if (!questions.length) {
-          host.append(el("div", { class: "empty", text: "no open questions" }));
+          if (!empty) host.append(el("div", { class: "empty", text: "no open questions" }));
           return;
         }
+        if (empty) empty.remove();
         for (const q of questions) {
+          if (questionNodes.has(q.id)) continue; // preserve input + focus + typed text
           const input = el("input", { type: "text", placeholder: "Your answer…" });
           const btn = el("button", { text: "Answer" });
           btn.onclick = async () => {
@@ -490,9 +546,15 @@
             });
             refreshState();
           };
-          host.append(
-            el("div", { class: "q" }, el("div", { class: "body", text: q.body }), input, btn),
+          const node = el(
+            "div",
+            { class: "q" },
+            el("div", { class: "body", text: q.body }),
+            input,
+            btn,
           );
+          questionNodes.set(q.id, node);
+          host.append(node);
         }
       }
 
@@ -515,17 +577,45 @@
         log.scrollTop = log.scrollHeight;
       }
 
+      // Diff-based, non-destructive refresh. Coalesced so overlapping triggers
+      // (the 5s poll + SSE events) never run concurrently or duplicate work.
+      let refreshing = false;
+      let refreshQueued = false;
       async function refreshState() {
-        const s = await api(`/api/state?projectId=${projectId}`);
-        if (!s.project) return;
-        document.getElementById("objective").textContent = s.project.objective || "";
-        renderCounts(s.taskCounts);
-        renderChanges(s.changes);
-        renderRuns(s.inFlightRuns);
-        renderPointers(s.pointers);
-        renderQuestions(s.openQuestions);
-        await renderCharts(s.project);
-        for (const ev of s.recentEvents) appendEvent(ev);
+        if (refreshing) {
+          refreshQueued = true;
+          return;
+        }
+        refreshing = true;
+        try {
+          const s = await api(`/api/state?projectId=${projectId}`);
+          if (!s.project) return;
+          const obj = document.getElementById("objective");
+          if (obj.textContent !== (s.project.objective || "")) {
+            obj.textContent = s.project.objective || "";
+          }
+          renderCounts(s.taskCounts);
+          renderChanges(s.changes);
+          renderRuns(s.inFlightRuns);
+          renderPointers(s.pointers);
+          renderQuestions(s.openQuestions);
+          ensureCharts(s.project.metrics || []);
+          updateCharts(); // fire-and-forget; redraws only changed series
+          for (const ev of s.recentEvents) appendEvent(ev);
+        } finally {
+          refreshing = false;
+          if (refreshQueued) {
+            refreshQueued = false;
+            refreshState();
+          }
+        }
+      }
+
+      // Debounce SSE-driven refreshes so a burst of events triggers one refresh.
+      let refreshTimer = null;
+      function scheduleRefresh() {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(refreshState, 300);
       }
 
       // ── live stream with polling fallback ───────────────────────────────
@@ -560,7 +650,10 @@
           stopPolling();
           setConn("live", "live (SSE)");
         };
-        es.onmessage = (e) => appendEvent(JSON.parse(e.data));
+        es.onmessage = (e) => {
+          appendEvent(JSON.parse(e.data));
+          scheduleRefresh();
+        };
         es.onerror = () => {
           setConn("down", "SSE dropped — polling");
           es.close();
@@ -574,6 +667,7 @@
           document.getElementById("objective").textContent = "no projects found";
           return;
         }
+        initCounts();
         document.getElementById("pointer-send").onclick = async () => {
           const ta = document.getElementById("pointer-body");
           if (!ta.value.trim()) return;
