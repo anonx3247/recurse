@@ -156,10 +156,18 @@ A **Change lands only if**:
 1. its eval **metrics improve or hold** (per each metric's `direction`), **and**
 2. a **review approves** it.
 
-When both hold, the change merges and **becomes the new baseline**. Metrics are
-tracked over time, so each landed change raises the bar the next iteration must
-clear. That is the recursion: improvements accumulate into the baseline that the
-next round is measured against.
+When both hold, the change is marked `merged` **and its branch is actually
+integrated into the project's `defaultBranch`** in the real target repo, so the
+improvement lands in history. Integration runs behind an injectable
+`IntegrateBranch` seam (mirroring the worker's `PushBranch` seam): the default
+implementation merges the pushed branch into `defaultBranch` and pushes inside a
+sandbox (a `gh`-PR strategy is also available), while offline tests inject a
+no-op/spy. It runs **only on merge** — never on reject/abandon — as its own
+idempotent checkpoint (guarded by a `branch.integrated` event), and the change
+**becomes the new baseline**. Metrics are tracked over time, so each landed
+change raises the bar the next iteration must clear. That is the recursion:
+improvements accumulate into the baseline that the next round is measured
+against.
 
 ## Human-in-the-loop (non-blocking)
 
@@ -245,8 +253,11 @@ Run the kernel and dashboard as two processes against the **same Postgres**
 3. Kernel enqueues a `review` task; a **Reviewer** sandbox inspects the Change and
    posts a **Review** (verdict + comments).
 4. **Merge gate**: if metrics improve/hold **and** the verdict is `approve`, the
-   change merges to `defaultBranch` and becomes the new baseline. Otherwise a
-   follow-up task loops back to a worker (`request_changes`) or it is abandoned.
+   change is marked `merged`, its branch is **integrated into `defaultBranch`**
+   in the target repo (a checkpointed, idempotent `IntegrateBranch` step that
+   runs only on merge and emits `branch.integrated`), and it becomes the new
+   baseline. Otherwise nothing touches the repo and a follow-up task loops back
+   to a worker (`request_changes`) or it is abandoned.
 5. A **Skill-distiller** may capture what worked into the repo's skills.
 6. Every step appends to the event log; the dashboard reflects it live.
 

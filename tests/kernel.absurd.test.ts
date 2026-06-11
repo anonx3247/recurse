@@ -150,7 +150,9 @@ test("absurd on PGlite: the durable improve-cycle task runs a full cycle to merg
         workerInvoker,
         reviewerInvoker,
         sandboxEnv: () => ({}),
-        options: { workdir: "workspace" },
+        // No-op integrator keeps the durable cycle hermetic (a real push to the
+        // fixture's checked-out default branch would fail).
+        options: { workdir: "workspace", integrate: async () => {} },
       },
       project,
     );

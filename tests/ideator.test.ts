@@ -269,7 +269,9 @@ test("a generated ideator task is picked up and run by the cycle", async () => {
       }),
       ideatorInvoker: ideatorWriting([{ title: "Raise score", prompt: "set 0.9", priority: 1 }]),
       sandboxEnv: () => ({}),
-      options: { workdir: "workspace" },
+      // Stub the branch integrator: this test asserts the cycle picks up an
+      // ideator task, not the (separately tested) real git integration.
+      options: { workdir: "workspace", integrate: async () => {} },
     };
 
     const ideator = { generate: () => runIdeatorPhase(deps, project) };

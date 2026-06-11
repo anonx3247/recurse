@@ -7,6 +7,7 @@
  */
 
 export * from "./eval";
+export * from "./integrate";
 export * from "./invoker";
 export * from "./prompts";
 export * from "./worker";
