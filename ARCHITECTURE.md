@@ -47,7 +47,10 @@ metric `direction` to decide whether a change improved or regressed.
 
 The kernel is **one long-running process that is never idle**. It maintains:
 
-- a **task/idea queue** — units of work (improve, idea, review, distill);
+- a **durable task/idea queue** — units of work (improve, idea, review, distill).
+  The queue is **stateful and durable**, backed by
+  [Absurd](https://earendil-works.github.io/absurd/) (see below) so in-flight
+  work survives restarts and crashes;
 - a **concurrency pool** that it keeps full up to `concurrency` — whenever a slot
   frees, it pulls the next task and launches an agent;
 - an **event log / state store** — the append-only source of truth that also
@@ -55,6 +58,25 @@ The kernel is **one long-running process that is never idle**. It maintains:
 
 The kernel orchestrates; it never edits the repo itself. All real work happens in
 agents running in sandboxes.
+
+### Durable queue (Absurd)
+
+The queue uses [Absurd](https://earendil-works.github.io/absurd/), a Postgres-native
+durable workflow system: a **task** dispatches onto a **queue**, a **worker** picks
+it up, and tasks are subdivided into **steps** that act as checkpoints — once a step
+completes its result is persisted and won't re-run, so a failed task retries from
+the last checkpoint instead of from scratch. Absurd also supports **sleep** (suspend
+until a time, ideal for the scheduled ideator) and **await-event** (suspend until a
+named event is emitted), which maps cleanly onto recurse's non-blocking
+human-in-the-loop: the kernel can `awaitEvent` on a `question.answered` event while
+continuing to drain other tasks. Absurd needs only a Postgres database and its
+single `absurd.sql` schema — no broker or coordination service.
+
+Note the storage split: the **durable queue/workflow state** lives in Postgres (via
+Absurd), while recurse's **domain state** (projects, changes, reviews, metrics,
+events) lives in the `Store` (SQLite via drizzle ORM today; the schema is portable
+to Postgres if we later consolidate on one database). Actual Absurd integration
+lands in the kernel-loop PR.
 
 ## Agents
 
@@ -151,14 +173,15 @@ A minimal web dashboard reads straight from the store (no business logic):
 
 The system is delivered as a stack of PRs. Later subagents: find your piece here.
 
-1. **Scaffold + core domain model & state store** *(this PR)* — project setup,
+1. **Scaffold + core domain model & state store** _(this PR)_ — project setup,
    this architecture doc, `src/core` types + config schema, `src/store`
-   (interface + sqlite + memory), example config, tests.
+   (interface + sqlite-via-drizzle + memory), example config, tests, CI.
 2. **Sandbox runner** — Daytona OCI integration: create/destroy sandboxes from the
    prebaked snapshot, stream logs, run commands inside.
 3. **Agent runner** — drive `pi` in print/RPC mode inside a sandbox for each role
    (worker/reviewer/ideator/distiller); parse eval output; write Changes/Reviews.
-4. **Kernel loop + merge gate** — the never-idle process: queue, concurrency pool,
-   scheduler, and the merge-gate logic that lands changes.
+4. **Kernel loop + merge gate** — the never-idle process: the Absurd-backed
+   durable queue, concurrency pool, scheduler, and the merge-gate logic that
+   lands changes.
 5. **Dashboard** — minimal web UI reading from the store: metric graphs, live
    logs, queue, pointers/questions.
