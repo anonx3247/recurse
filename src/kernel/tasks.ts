@@ -62,7 +62,7 @@ export function registerTasks(
   // otherwise the seam falls back to a generic seed task.
   const ideator: Ideator | undefined = deps.ideatorInvoker
     ? {
-        generate: (_store, proj) => runIdeatorPhase(deps, proj),
+        generate: () => runIdeatorPhase(deps, project),
         cap: deps.options?.maxOpenIdeatorTasks,
       }
     : undefined;

@@ -47,7 +47,7 @@ export const DEFAULT_MAX_OPEN_IDEATOR_TASKS = 6;
  */
 export interface Ideator {
   /** Generate and persist new `improve` tasks; returns those created. */
-  generate(store: Store, project: Project): Promise<Task[]>;
+  generate(): Promise<Task[]>;
   /** Max open ideator-sourced tasks allowed before skipping. */
   cap?: number;
 }
@@ -64,7 +64,7 @@ export async function ensureWorkWithIdeator(
   if (ideator) {
     const cap = ideator.cap ?? DEFAULT_MAX_OPEN_IDEATOR_TASKS;
     if ((await countOpenIdeatorTasks(store, project.id)) < cap) {
-      const created = await ideator.generate(store, project);
+      const created = await ideator.generate();
       if (created.length > 0) return created;
     }
   }
