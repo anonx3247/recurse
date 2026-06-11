@@ -9,10 +9,10 @@
  * disposed before returning; `handleId` is kept for correlation only.
  */
 
-import type { Change, Project, ReviewComment, ReviewVerdict } from "../core/types.js";
-import { type SandboxHandle, type SandboxRunner, cloneRepo } from "../sandbox/index.js";
-import type { AgentInvoker } from "./invoker.js";
-import { REVIEW_PATH, buildReviewerPrompt } from "./prompts.js";
+import type { Change, Project, ReviewComment, ReviewVerdict } from "../core/types";
+import { type SandboxHandle, type SandboxRunner, cloneRepo } from "../sandbox/index";
+import type { AgentInvoker } from "./invoker";
+import { REVIEW_PATH, buildReviewerPrompt } from "./prompts";
 
 /** Structured review (the store ids are assigned by the caller). */
 export interface ReviewResult {

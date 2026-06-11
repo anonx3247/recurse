@@ -8,11 +8,11 @@
  * disposed before returning; `handleId` is kept for correlation only.
  */
 
-import type { Project, Task } from "../core/types.js";
-import { type SandboxHandle, type SandboxRunner, cloneRepo } from "../sandbox/index.js";
-import { runEval } from "./eval.js";
-import type { AgentInvoker } from "./invoker.js";
-import { buildWorkerPrompt } from "./prompts.js";
+import type { Project, Task } from "../core/types";
+import { type SandboxHandle, type SandboxRunner, cloneRepo } from "../sandbox/index";
+import { runEval } from "./eval";
+import type { AgentInvoker } from "./invoker";
+import { buildWorkerPrompt } from "./prompts";
 
 /** Structured outcome of a worker run (store ids are assigned by the caller). */
 export interface WorkerResult {

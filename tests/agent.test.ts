@@ -4,9 +4,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { FakeAgentInvoker, parseEvalOutput, runReviewer, runWorker } from "../src/agent/index.js";
-import type { Change, Project, Task } from "../src/core/index.js";
-import { LocalSandboxRunner } from "../src/sandbox/index.js";
+import { FakeAgentInvoker, parseEvalOutput, runReviewer, runWorker } from "../src/agent/index";
+import type { Change, Project, Task } from "../src/core/index";
+import { LocalSandboxRunner } from "../src/sandbox/index";
 
 /**
  * Offline tests: a real `LocalSandboxRunner` plus a `FakeAgentInvoker`, against

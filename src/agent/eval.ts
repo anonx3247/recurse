@@ -7,8 +7,8 @@
  * possibly-noisy command output, so the logic lives here once.
  */
 
-import type { Project } from "../core/types.js";
-import type { SandboxHandle } from "../sandbox/index.js";
+import type { Project } from "../core/types";
+import type { SandboxHandle } from "../sandbox/index";
 
 /**
  * Extract the LAST JSON object on `stdout` and return it as a flat metrics map.

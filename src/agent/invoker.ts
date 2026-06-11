@@ -7,7 +7,7 @@
  * (no model, no network) while production uses {@link PiAgentInvoker}.
  */
 
-import type { SandboxHandle } from "../sandbox/index.js";
+import type { SandboxHandle } from "../sandbox/index";
 
 /** Options for a single {@link AgentInvoker.run}. */
 export interface AgentInvokeOptions {

@@ -7,7 +7,7 @@
  * - the reviewer's `.recurse/review.json` verdict file (see {@link REVIEW_PATH}).
  */
 
-import type { Project } from "../core/types.js";
+import type { Project } from "../core/types";
 
 /** Sandbox-relative path where the reviewer must write its verdict. */
 export const REVIEW_PATH = ".recurse/review.json";

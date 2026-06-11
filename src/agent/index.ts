@@ -6,8 +6,8 @@
  * here and depend only on the {@link SandboxRunner} interface underneath.
  */
 
-export * from "./eval.js";
-export * from "./invoker.js";
-export * from "./prompts.js";
-export * from "./worker.js";
-export * from "./reviewer.js";
+export * from "./eval";
+export * from "./invoker";
+export * from "./prompts";
+export * from "./worker";
+export * from "./reviewer";
