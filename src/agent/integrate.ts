@@ -45,45 +45,46 @@ export type IntegrateMode = "git-merge" | "github-pr";
  * to `origin`, so we fetch it and merge `--no-edit` (fast-forward when the base
  * has not moved, a real merge commit otherwise).
  */
-export const gitIntegrateBranch: IntegrateBranch = async (input) => {
-  const workdir = input.workdir ?? "/workspace";
-  const base = input.project.defaultBranch;
-  const handle = await input.runner.create({ snapshot: input.snapshot, envVars: input.env });
-  try {
-    await cloneRepo(handle, input.project.repoUrl, workdir, base);
+export const gitIntegrateBranch: IntegrateBranch = (input) =>
+  inCheckout(input, async (handle, workdir, base) => {
     await runGit(handle, workdir, `git fetch origin ${input.branch}`);
     await runGit(handle, workdir, "git merge --no-edit FETCH_HEAD");
     await runGit(handle, workdir, `git push origin ${base}`);
-  } finally {
-    await handle.dispose();
-  }
-};
+  });
 
 /**
  * Alternative integration: open and merge a GitHub PR for the branch via the
  * `gh` CLI (which must be authenticated in the sandbox). Useful when the target
  * repo's policy requires PRs rather than direct pushes.
  */
-export const githubPrIntegrateBranch: IntegrateBranch = async (input) => {
+export const githubPrIntegrateBranch: IntegrateBranch = (input) =>
+  inCheckout(input, async (handle, workdir, base) => {
+    await runGit(handle, workdir, `gh pr create --head ${input.branch} --base ${base} --fill || true`);
+    await runGit(handle, workdir, `gh pr merge ${input.branch} --merge --admin`);
+  });
+
+/** Resolve the built-in integrator for a mode, defaulting to git-merge. */
+export function integratorForMode(mode?: IntegrateMode): IntegrateBranch {
+  return mode === "github-pr" ? githubPrIntegrateBranch : gitIntegrateBranch;
+}
+
+/**
+ * Run `fn` against a fresh sandbox with `defaultBranch` checked out, disposing
+ * the sandbox afterward. Shared scaffolding for the built-in integrators.
+ */
+async function inCheckout(
+  input: IntegrateBranchInput,
+  fn: (handle: SandboxHandle, workdir: string, base: string) => Promise<void>,
+): Promise<void> {
   const workdir = input.workdir ?? "/workspace";
   const base = input.project.defaultBranch;
   const handle = await input.runner.create({ snapshot: input.snapshot, envVars: input.env });
   try {
     await cloneRepo(handle, input.project.repoUrl, workdir, base);
-    await runGit(
-      handle,
-      workdir,
-      `gh pr create --head ${input.branch} --base ${base} --fill || true`,
-    );
-    await runGit(handle, workdir, `gh pr merge ${input.branch} --merge --admin`);
+    await fn(handle, workdir, base);
   } finally {
     await handle.dispose();
   }
-};
-
-/** Resolve the built-in integrator for a mode, defaulting to git-merge. */
-export function integratorForMode(mode?: IntegrateMode): IntegrateBranch {
-  return mode === "github-pr" ? githubPrIntegrateBranch : gitIntegrateBranch;
 }
 
 /** Run a git/gh command, throwing with captured stderr on failure. */
