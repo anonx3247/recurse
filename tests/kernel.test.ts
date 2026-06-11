@@ -6,11 +6,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { type AgentInvoker, FakeAgentInvoker } from "../src/agent/index";
 import type { MetricSpec, Project, Review } from "../src/core/index";
+import type { IntegrateBranch } from "../src/agent/index";
 import {
   type CycleDeps,
   compareMetrics,
   ensureWork,
   evaluateGate,
+  integrateChange,
   isReviewApproved,
   pickNextTask,
   runCycle,
@@ -98,7 +100,10 @@ function makeDeps(
     workerInvoker,
     reviewerInvoker,
     sandboxEnv: () => ({}),
-    options: { workdir: "workspace", ...options },
+    // Default to a no-op integrator so cycles stay hermetic (pushing to the
+    // fixture's checked-out default branch would fail); tests that assert on
+    // integration pass their own spy via `options.integrate`.
+    options: { workdir: "workspace", integrate: async () => {}, ...options },
   };
 }
 
@@ -228,6 +233,75 @@ test("runCycle happy path: improving change merges and updates baseline", async 
     assert.equal(samples[0].changeId, changes[0].id);
     const types = (await store.listEvents(project.id)).map((e) => e.type);
     assert.ok(types.includes("change.merged"));
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("runCycle: a merging cycle integrates the branch exactly once", async () => {
+  const repo = await makeFixtureRepo("0.5");
+  try {
+    const store = new MemoryStore();
+    const project = await store.createProject(fixtureProject(repo));
+    let calls = 0;
+    const integrate: IntegrateBranch = async () => {
+      calls++;
+    };
+    const deps = makeDeps(
+      store,
+      workerSetting(0.9),
+      reviewerWith({ verdict: "approve", summary: "good", comments: [] }),
+      { integrate },
+    );
+
+    const outcome = await seedAndRun(deps, project);
+    assert.equal(outcome?.merged, true);
+    assert.equal(calls, 1);
+
+    const events = await store.listEvents(project.id);
+    assert.ok(events.some((e) => e.type === "branch.integrated"));
+
+    // Idempotent: re-running the integrate step does not integrate again.
+    const change = (await store.listChanges(project.id))[0];
+    const integratedAgain = await integrateChange(deps, project, change);
+    assert.equal(integratedAgain, false);
+    assert.equal(calls, 1);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("runCycle: a rejected change never integrates the branch", async () => {
+  const repo = await makeFixtureRepo("0.5");
+  try {
+    const store = new MemoryStore();
+    const project = await store.createProject(fixtureProject(repo));
+    await store.createChange({
+      projectId: project.id,
+      taskId: "seed",
+      branch: "recurse/seed",
+      title: "seed",
+      summary: "",
+      status: "merged",
+      newMetrics: { score: 0.8 },
+    });
+    let calls = 0;
+    const integrate: IntegrateBranch = async () => {
+      calls++;
+    };
+    const deps = makeDeps(
+      store,
+      workerSetting(0.2), // worse than baseline 0.8 → rejected
+      reviewerWith({ verdict: "approve", summary: "lgtm", comments: [] }),
+      { integrate },
+    );
+
+    const outcome = await seedAndRun(deps, project);
+    assert.equal(outcome?.merged, false);
+    assert.equal(calls, 0);
+    assert.ok(
+      !(await store.listEvents(project.id)).some((e) => e.type === "branch.integrated"),
+    );
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
