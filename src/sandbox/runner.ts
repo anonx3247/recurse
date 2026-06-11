@@ -85,8 +85,9 @@ export async function cloneRepo(
   dir: string,
   branch?: string,
 ): Promise<void> {
-  const branchArg = branch ? `--branch ${branch} ` : "";
-  const result = await handle.exec(`git clone ${branchArg}${repoUrl} ${dir}`);
+  const branchArg = branch ? `--branch ${branch}` : "";
+  const command = ["git clone", branchArg, repoUrl, dir].filter(Boolean).join(" ");
+  const result = await handle.exec(command);
   if (result.exitCode !== 0) {
     throw new Error(
       `cloneRepo failed (exit ${result.exitCode}): ${result.stderr || result.stdout}`,
