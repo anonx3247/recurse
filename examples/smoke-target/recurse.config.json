@@ -1,0 +1,16 @@
+{
+  "name": "smoke-target",
+  "repoUrl": "file:///opt/recurse-origin.git",
+  "defaultBranch": "main",
+  "objective": "Make all unit tests pass by fixing the implementation, without weakening or deleting any test.",
+  "evalCommand": "node eval.mjs",
+  "metrics": [
+    {
+      "key": "passRate",
+      "label": "Test pass rate",
+      "direction": "maximize",
+      "unit": "ratio"
+    }
+  ],
+  "concurrency": 1
+}
