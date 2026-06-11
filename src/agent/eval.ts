@@ -65,40 +65,32 @@ export async function runEval(
 
 /**
  * Return the source text of the last top-level `{...}` object in `text`, or
- * `undefined` if there is none. Scans from the end for the closing brace, then
- * walks back tracking brace depth (ignoring braces inside strings) to find its
- * matching open.
+ * `undefined` if there is none. Scans forward tracking brace depth (ignoring
+ * braces inside strings) and remembers the last balanced top-level object.
  */
 function lastJsonObject(text: string): string | undefined {
-  const end = text.lastIndexOf("}");
-  if (end === -1) return undefined;
-
   let depth = 0;
+  let start = -1;
   let inString = false;
-  for (let i = end; i >= 0; i--) {
+  let escaped = false;
+  let last: string | undefined;
+
+  for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (inString) {
-      // Walking backwards: a quote ends the string unless it is escaped, which
-      // we detect by counting preceding backslashes.
-      if (ch === '"' && !isEscapedQuote(text, i)) inString = false;
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
       continue;
     }
-    if (ch === '"') {
-      inString = true;
-      continue;
-    }
-    if (ch === "}") depth++;
+    if (ch === '"') inString = true;
     else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}" && depth > 0) {
       depth--;
-      if (depth === 0) return text.slice(i, end + 1);
+      if (depth === 0) last = text.slice(start, i + 1);
     }
   }
-  return undefined;
-}
-
-/** True if the `"` at `index` is escaped by an odd number of backslashes. */
-function isEscapedQuote(text: string, index: number): boolean {
-  let backslashes = 0;
-  for (let i = index - 1; i >= 0 && text[i] === "\\"; i--) backslashes++;
-  return backslashes % 2 === 1;
+  return last;
 }
