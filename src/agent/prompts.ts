@@ -79,11 +79,7 @@ function describeDeltas(deltas: ReviewerPromptInput["metricDeltas"]): string {
  * Build the reviewer prompt: assess the diff + metric deltas against the
  * objective and write a structured verdict to {@link REVIEW_PATH}.
  */
-export function buildReviewerPrompt({
-  project,
-  diff,
-  metricDeltas,
-}: ReviewerPromptInput): string {
+export function buildReviewerPrompt({ project, diff, metricDeltas }: ReviewerPromptInput): string {
   return `You are a Reviewer agent reviewing a proposed change to "${project.name}",
 like reviewing a pull request.
 

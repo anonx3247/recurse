@@ -88,7 +88,9 @@ export async function runWorker(input: RunWorkerInput): Promise<WorkerResult> {
     await commitIfDirty(handle, workdir);
 
     const diff = (await runGit(handle, workdir, `git diff ${base}...HEAD`)).stdout;
-    const changedFiles = (await runGit(handle, workdir, `git diff --name-only ${base}...HEAD`)).stdout
+    const changedFiles = (
+      await runGit(handle, workdir, `git diff --name-only ${base}...HEAD`)
+    ).stdout
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
@@ -121,7 +123,9 @@ async function commitIfDirty(handle: SandboxHandle, cwd: string): Promise<void> 
 async function runGit(handle: SandboxHandle, cwd: string, command: string) {
   const result = await handle.exec(command, { cwd });
   if (result.exitCode !== 0) {
-    throw new Error(`${command} failed (exit ${result.exitCode}): ${result.stderr || result.stdout}`);
+    throw new Error(
+      `${command} failed (exit ${result.exitCode}): ${result.stderr || result.stdout}`,
+    );
   }
   return result;
 }
