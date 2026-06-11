@@ -31,6 +31,8 @@ import { runCycle } from "../kernel/phases";
 import {
   type CreateSandboxOptions,
   DaytonaSandboxRunner,
+  type ExecOptions,
+  type ExecResult,
   type SandboxHandle,
   type SandboxRunner,
 } from "../sandbox/index";
@@ -69,6 +71,40 @@ function smokeTargetDir(): string {
 }
 
 /**
+ * Delegates every operation to a shared sandbox, but on `dispose()` only resets
+ * the workdir (the caller owns the real sandbox's lifecycle).
+ */
+class SharedSandboxHandle implements SandboxHandle {
+  constructor(
+    private readonly inner: SandboxHandle,
+    private readonly reset: () => Promise<void>,
+  ) {}
+
+  get id(): string {
+    return this.inner.id;
+  }
+  exec(command: string, opts?: ExecOptions): Promise<ExecResult> {
+    return this.inner.exec(command, opts);
+  }
+  execStream(
+    command: string,
+    onChunk: (chunk: string) => void,
+    opts?: ExecOptions,
+  ): Promise<ExecResult> {
+    return this.inner.execStream(command, onChunk, opts);
+  }
+  writeFile(path: string, content: string): Promise<void> {
+    return this.inner.writeFile(path, content);
+  }
+  readFile(path: string): Promise<string> {
+    return this.inner.readFile(path);
+  }
+  dispose(): Promise<void> {
+    return this.reset();
+  }
+}
+
+/**
  * A {@link SandboxRunner} backed by a single, already-provisioned sandbox.
  *
  * `runCycle` runs the worker and reviewer sequentially, each calling
@@ -87,14 +123,7 @@ class SharedSandboxRunner implements SandboxRunner {
 
   async create(_opts?: CreateSandboxOptions): Promise<SandboxHandle> {
     await this.resetWorkdir();
-    const reset = () => this.resetWorkdir();
-    return new Proxy(this.handle, {
-      get(target, prop, receiver) {
-        if (prop === "dispose") return reset;
-        const value = Reflect.get(target, prop, receiver);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
+    return new SharedSandboxHandle(this.handle, () => this.resetWorkdir());
   }
 
   /** Remove the workdir so the next `git clone` starts from a clean slate. */
