@@ -13,8 +13,15 @@
 
 import type { Absurd } from "absurd-sdk";
 import type { Project } from "../core/types";
-import { type CycleDeps, KernelEvents, runGate, runReviewPhase, runWorkerPhase } from "./phases";
-import { ensureWork } from "./scheduler";
+import {
+  type CycleDeps,
+  KernelEvents,
+  runGate,
+  runIdeatorPhase,
+  runReviewPhase,
+  runWorkerPhase,
+} from "./phases";
+import { type Ideator, ensureWork, ensureWorkWithIdeator } from "./scheduler";
 
 /** Absurd task names. */
 export const TASK_IMPROVE_CYCLE = "improve-cycle";
@@ -50,6 +57,15 @@ export function registerTasks(
 ): void {
   const { store } = deps;
   const intervalSeconds = options.schedulerIntervalSeconds ?? 60;
+
+  // Wire the Ideator into the never-idle seam only when an invoker is provided;
+  // otherwise the seam falls back to a generic seed task.
+  const ideator: Ideator | undefined = deps.ideatorInvoker
+    ? {
+        generate: (_store, proj) => runIdeatorPhase(deps, proj),
+        cap: deps.options?.maxOpenIdeatorTasks,
+      }
+    : undefined;
 
   app.registerTask({ name: TASK_IMPROVE_CYCLE }, async (params: CycleParams, ctx) => {
     const task = await store.getTask(params.taskId);
@@ -115,19 +131,24 @@ export function registerTasks(
   app.registerTask({ name: TASK_SCHEDULER_TICK }, async (_params: { projectId: string }, ctx) => {
     await ctx.sleepFor("wait", intervalSeconds);
 
-    const seededTaskId = await ctx.step("ensure-work", async () => {
-      const seeded = await ensureWork(store, project);
-      return seeded?.id ?? null;
+    // The never-idle seam: when no improve work is queued, run the Ideator (its
+    // own checkpointed step + AgentRun) to enqueue fresh tasks, else seed one.
+    const seededTaskIds = await ctx.step("ensure-work", async () => {
+      await ctx.heartbeat(options.heartbeatSeconds);
+      const tasks = await ensureWorkWithIdeator(store, project, ideator);
+      return tasks.map((t) => t.id);
     });
 
-    if (seededTaskId) {
-      await ctx.step("spawn-cycle", async () => {
-        await app.spawn(
-          TASK_IMPROVE_CYCLE,
-          { projectId: project.id, taskId: seededTaskId },
-          { idempotencyKey: cycleKey(seededTaskId) },
-        );
-        return true;
+    if (seededTaskIds.length > 0) {
+      await ctx.step("spawn-cycles", async () => {
+        for (const taskId of seededTaskIds) {
+          await app.spawn(
+            TASK_IMPROVE_CYCLE,
+            { projectId: project.id, taskId },
+            { idempotencyKey: cycleKey(taskId) },
+          );
+        }
+        return seededTaskIds.length;
       });
     }
 
@@ -137,7 +158,7 @@ export function registerTasks(
       await app.spawn(TASK_SCHEDULER_TICK, { projectId: project.id });
       return true;
     });
-    return { seededTaskId };
+    return { seededTaskIds };
   });
 }
 

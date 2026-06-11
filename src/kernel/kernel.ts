@@ -35,6 +35,8 @@ export interface KernelDeps {
   workerInvoker: AgentInvoker;
   /** Drives the Reviewer agent. */
   reviewerInvoker: AgentInvoker;
+  /** Drives the Ideator agent (the never-idle work generator). Optional. */
+  ideatorInvoker?: AgentInvoker;
   /** Provider keys / model config injected into each sandbox at create time. */
   sandboxEnv: () => Record<string, string>;
   clock?: Clock;
@@ -91,6 +93,7 @@ export class Kernel {
       runner: this.deps.runner,
       workerInvoker: this.deps.workerInvoker,
       reviewerInvoker: this.deps.reviewerInvoker,
+      ideatorInvoker: this.deps.ideatorInvoker,
       sandboxEnv: this.deps.sandboxEnv,
       clock: this.deps.clock,
       logger: this.deps.logger,

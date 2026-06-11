@@ -142,6 +142,7 @@ function parseIdea(value: unknown): IdeaProposal | undefined {
   const obj = value as Record<string, unknown>;
   if (typeof obj.title !== "string" || obj.title.trim() === "") return undefined;
   if (typeof obj.prompt !== "string" || obj.prompt.trim() === "") return undefined;
-  const priority = typeof obj.priority === "number" && Number.isFinite(obj.priority) ? obj.priority : 0;
+  const priority =
+    typeof obj.priority === "number" && Number.isFinite(obj.priority) ? obj.priority : 0;
   return { title: obj.title.trim(), prompt: obj.prompt.trim(), priority };
 }
