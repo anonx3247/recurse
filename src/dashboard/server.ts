@@ -258,22 +258,14 @@ async function answerQuestion(
   }
   const answer = body.answer.trim();
   try {
+    // resumeQuestion writes the store AND emits the Absurd wake-up event; the
+    // store-only fallback is for setups without a wired Absurd client (tests).
     if (app) await resumeQuestion(app, store, questionId, answer);
     else await store.answerQuestion(questionId, answer);
-    return sendJson(res, 200, await currentQuestion(store, questionId));
   } catch {
     return sendJson(res, 404, { error: `question not found: ${questionId}` });
   }
-}
-
-/** Re-read a question by id (the store has no get-by-id), or throw if absent. */
-async function currentQuestion(store: Store, questionId: string) {
-  const projects = await store.listProjects();
-  for (const project of projects) {
-    const found = (await store.listQuestions(project.id)).find((q) => q.id === questionId);
-    if (found) return found;
-  }
-  throw new Error(`question not found: ${questionId}`);
+  return sendJson(res, 200, { id: questionId, status: "answered", answer });
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

@@ -16,12 +16,18 @@
         --bad: #f85149;
         --warn: #d29922;
       }
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         background: var(--bg);
         color: var(--fg);
-        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        font:
+          14px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
       }
       header {
         padding: 12px 20px;
@@ -31,13 +37,34 @@
         gap: 16px;
         flex-wrap: wrap;
       }
-      header h1 { font-size: 16px; margin: 0; }
-      header .obj { color: var(--muted); font-size: 12px; }
-      header .conn { margin-left: auto; font-size: 12px; }
-      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-      .dot.live { background: var(--good); }
-      .dot.poll { background: var(--warn); }
-      .dot.down { background: var(--bad); }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+      }
+      header .obj {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      header .conn {
+        margin-left: auto;
+        font-size: 12px;
+      }
+      .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+      .dot.live {
+        background: var(--good);
+      }
+      .dot.poll {
+        background: var(--warn);
+      }
+      .dot.down {
+        background: var(--bad);
+      }
       main {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -51,50 +78,171 @@
         padding: 12px 14px;
         min-width: 0;
       }
-      .panel h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-      .full { grid-column: 1 / -1; }
-      .counts { display: flex; gap: 16px; flex-wrap: wrap; }
-      .counts .c { text-align: center; }
-      .counts .n { font-size: 20px; font-weight: bold; }
-      .counts .l { font-size: 11px; color: var(--muted); }
-      .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-      .chart h3 { font-size: 12px; margin: 0 0 2px; }
-      .chart .latest { font-size: 12px; color: var(--accent); }
-      canvas { width: 100%; height: 120px; display: block; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-      th { color: var(--muted); font-weight: normal; }
-      .badge { padding: 1px 6px; border-radius: 10px; font-size: 11px; border: 1px solid var(--border); }
-      .badge.merged { color: var(--good); border-color: var(--good); }
-      .badge.rejected, .badge.abandoned { color: var(--bad); border-color: var(--bad); }
-      .badge.in_review, .badge.draft { color: var(--warn); border-color: var(--warn); }
-      #log { max-height: 320px; overflow-y: auto; font-size: 12px; }
-      #log .ev { padding: 2px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
-      #log .t { color: var(--muted); flex-shrink: 0; }
-      #log .ty { color: var(--accent); flex-shrink: 0; }
-      #log .p { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-      textarea, input[type="text"] {
-        width: 100%; background: var(--bg); color: var(--fg);
-        border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: inherit;
+      .panel h2 {
+        font-size: 13px;
+        margin: 0 0 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .full {
+        grid-column: 1 / -1;
+      }
+      .counts {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .counts .c {
+        text-align: center;
+      }
+      .counts .n {
+        font-size: 20px;
+        font-weight: bold;
+      }
+      .counts .l {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+      .chart h3 {
+        font-size: 12px;
+        margin: 0 0 2px;
+      }
+      .chart .latest {
+        font-size: 12px;
+        color: var(--accent);
+      }
+      canvas {
+        width: 100%;
+        height: 120px;
+        display: block;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      th {
+        color: var(--muted);
+        font-weight: normal;
+      }
+      .badge {
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 11px;
+        border: 1px solid var(--border);
+      }
+      .badge.merged {
+        color: var(--good);
+        border-color: var(--good);
+      }
+      .badge.rejected,
+      .badge.abandoned {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .badge.in_review,
+      .badge.draft {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      #log {
+        max-height: 320px;
+        overflow-y: auto;
+        font-size: 12px;
+      }
+      #log .ev {
+        padding: 2px 0;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+      }
+      #log .t {
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      #log .ty {
+        color: var(--accent);
+        flex-shrink: 0;
+      }
+      #log .p {
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      textarea,
+      input[type="text"] {
+        width: 100%;
+        background: var(--bg);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        font: inherit;
       }
       button {
-        margin-top: 8px; background: var(--accent); color: #0d1117; border: 0;
-        border-radius: 6px; padding: 7px 14px; font: inherit; font-weight: bold; cursor: pointer;
+        margin-top: 8px;
+        background: var(--accent);
+        color: #0d1117;
+        border: 0;
+        border-radius: 6px;
+        padding: 7px 14px;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
       }
-      button:hover { opacity: 0.9; }
-      .hint { font-size: 11px; color: var(--muted); margin: 4px 0 0; }
-      .q { border-bottom: 1px solid var(--border); padding: 8px 0; }
-      .q .body { margin-bottom: 6px; }
-      ul.plain { list-style: none; padding: 0; margin: 0; font-size: 12px; }
-      ul.plain li { padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
-      .empty { color: var(--muted); font-style: italic; font-size: 12px; }
+      button:hover {
+        opacity: 0.9;
+      }
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 4px 0 0;
+      }
+      .q {
+        border-bottom: 1px solid var(--border);
+        padding: 8px 0;
+      }
+      .q .body {
+        margin-bottom: 6px;
+      }
+      ul.plain {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 12px;
+      }
+      ul.plain li {
+        padding: 3px 0;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+      }
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
     <header>
       <h1>recurse</h1>
       <span class="obj" id="objective"></span>
-      <span class="conn"><span class="dot down" id="conn-dot"></span><span id="conn-text">connecting…</span></span>
+      <span class="conn"
+        ><span class="dot down" id="conn-dot"></span><span id="conn-text">connecting…</span></span
+      >
     </header>
 
     <main>
@@ -116,12 +264,26 @@
 
       <section class="panel">
         <h2>Changes</h2>
-        <table id="changes"><thead><tr><th>title</th><th>status</th><th>branch</th><th>Δ metrics</th></tr></thead><tbody></tbody></table>
+        <table id="changes">
+          <thead>
+            <tr>
+              <th>title</th>
+              <th>status</th>
+              <th>branch</th>
+              <th>Δ metrics</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </section>
 
       <section class="panel">
         <h2>Pointers <span class="hint">— non-blocking guidance</span></h2>
-        <textarea id="pointer-body" rows="3" placeholder="Drop a direction or hint for the system…"></textarea>
+        <textarea
+          id="pointer-body"
+          rows="3"
+          placeholder="Drop a direction or hint for the system…"
+        ></textarea>
         <button id="pointer-send">Send pointer</button>
         <ul class="plain" id="pointers"></ul>
       </section>
@@ -162,56 +324,106 @@
       // ── metric charts (hand-rolled canvas) ──────────────────────────────
       function drawChart(canvas, samples, spec) {
         const dpr = window.devicePixelRatio || 1;
-        const w = canvas.clientWidth, h = canvas.clientHeight;
-        canvas.width = w * dpr; canvas.height = h * dpr;
+        const w = canvas.clientWidth,
+          h = canvas.clientHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
         const ctx = canvas.getContext("2d");
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, w, h);
         const pad = { l: 38, r: 8, t: 8, b: 18 };
         const values = samples.map((s) => s.value);
-        if (!values.length) { ctx.fillStyle = "#8b949e"; ctx.fillText("no samples yet", pad.l, h / 2); return; }
-        let min = Math.min(...values), max = Math.max(...values);
-        if (min === max) { min -= 1; max += 1; }
-        const px = (i) => pad.l + (samples.length === 1 ? 0 : (i / (samples.length - 1)) * (w - pad.l - pad.r));
+        if (!values.length) {
+          ctx.fillStyle = "#8b949e";
+          ctx.fillText("no samples yet", pad.l, h / 2);
+          return;
+        }
+        let min = Math.min(...values),
+          max = Math.max(...values);
+        if (min === max) {
+          min -= 1;
+          max += 1;
+        }
+        const px = (i) =>
+          pad.l + (samples.length === 1 ? 0 : (i / (samples.length - 1)) * (w - pad.l - pad.r));
         const py = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
         // axes
-        ctx.strokeStyle = "#30363d"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, h - pad.b); ctx.lineTo(w - pad.r, h - pad.b); ctx.stroke();
-        ctx.fillStyle = "#8b949e"; ctx.font = "10px monospace";
+        ctx.strokeStyle = "#30363d";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, pad.t);
+        ctx.lineTo(pad.l, h - pad.b);
+        ctx.lineTo(w - pad.r, h - pad.b);
+        ctx.stroke();
+        ctx.fillStyle = "#8b949e";
+        ctx.font = "10px monospace";
         ctx.fillText(max.toFixed(2), 2, pad.t + 8);
         ctx.fillText(min.toFixed(2), 2, h - pad.b);
         // line
         ctx.strokeStyle = spec && spec.direction === "minimize" ? "#d29922" : "#58a6ff";
-        ctx.lineWidth = 1.5; ctx.beginPath();
-        samples.forEach((s, i) => { const x = px(i), y = py(s.value); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        samples.forEach((s, i) => {
+          const x = px(i),
+            y = py(s.value);
+          if (i) ctx.lineTo(x, y);
+          else ctx.moveTo(x, y);
+        });
         ctx.stroke();
         // last point
-        const lx = px(samples.length - 1), ly = py(values[values.length - 1]);
-        ctx.fillStyle = "#58a6ff"; ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+        const lx = px(samples.length - 1),
+          ly = py(values[values.length - 1]);
+        ctx.fillStyle = "#58a6ff";
+        ctx.beginPath();
+        ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       async function renderCharts(project) {
         const host = document.getElementById("charts");
         host.innerHTML = "";
         for (const spec of project.metrics || []) {
-          const samples = await api(`/api/metrics?projectId=${projectId}&key=${encodeURIComponent(spec.key)}`);
+          const samples = await api(
+            `/api/metrics?projectId=${projectId}&key=${encodeURIComponent(spec.key)}`,
+          );
           const canvas = el("canvas");
           const latest = samples.length ? samples[samples.length - 1].value : "—";
-          host.append(el("div", { class: "chart" },
-            el("h3", { text: `${spec.label} (${spec.direction})` }),
-            el("div", { class: "latest", text: `latest: ${latest}${spec.unit ? " " + spec.unit : ""}` }),
-            canvas));
+          host.append(
+            el(
+              "div",
+              { class: "chart" },
+              el("h3", { text: `${spec.label} (${spec.direction})` }),
+              el("div", {
+                class: "latest",
+                text: `latest: ${latest}${spec.unit ? " " + spec.unit : ""}`,
+              }),
+              canvas,
+            ),
+          );
           drawChart(canvas, samples, spec);
         }
-        if (!(project.metrics || []).length) host.append(el("div", { class: "empty", text: "no metrics declared" }));
+        if (!(project.metrics || []).length)
+          host.append(el("div", { class: "empty", text: "no metrics declared" }));
       }
 
       // ── state panels ────────────────────────────────────────────────────
       function renderCounts(c) {
         const host = document.getElementById("counts");
         host.innerHTML = "";
-        for (const [label, key] of [["queued", "queued"], ["running", "running"], ["done", "done"], ["failed", "failed"]]) {
-          host.append(el("div", { class: "c" }, el("div", { class: "n", text: String(c[key] ?? 0) }), el("div", { class: "l", text: label })));
+        for (const [label, key] of [
+          ["queued", "queued"],
+          ["running", "running"],
+          ["done", "done"],
+          ["failed", "failed"],
+        ]) {
+          host.append(
+            el(
+              "div",
+              { class: "c" },
+              el("div", { class: "n", text: String(c[key] ?? 0) }),
+              el("div", { class: "l", text: label }),
+            ),
+          );
         }
       }
 
@@ -226,13 +438,23 @@
       function renderChanges(changes) {
         const body = document.querySelector("#changes tbody");
         body.innerHTML = "";
-        if (!changes.length) { body.append(el("tr", {}, el("td", { colspan: "4", class: "empty", text: "no changes yet" }))); return; }
+        if (!changes.length) {
+          body.append(
+            el("tr", {}, el("td", { colspan: "4", class: "empty", text: "no changes yet" })),
+          );
+          return;
+        }
         for (const c of changes) {
-          body.append(el("tr", {},
-            el("td", { text: c.title }),
-            el("td", {}, el("span", { class: `badge ${c.status}`, text: c.status })),
-            el("td", { text: c.branch }),
-            el("td", { text: fmtDelta(c) })));
+          body.append(
+            el(
+              "tr",
+              {},
+              el("td", { text: c.title }),
+              el("td", {}, el("span", { class: `badge ${c.status}`, text: c.status })),
+              el("td", { text: c.branch }),
+              el("td", { text: fmtDelta(c) }),
+            ),
+          );
         }
       }
 
@@ -252,19 +474,25 @@
       function renderQuestions(questions) {
         const host = document.getElementById("questions");
         host.innerHTML = "";
-        if (!questions.length) { host.append(el("div", { class: "empty", text: "no open questions" })); return; }
+        if (!questions.length) {
+          host.append(el("div", { class: "empty", text: "no open questions" }));
+          return;
+        }
         for (const q of questions) {
           const input = el("input", { type: "text", placeholder: "Your answer…" });
           const btn = el("button", { text: "Answer" });
           btn.onclick = async () => {
             if (!input.value.trim()) return;
             await fetch(`/api/questions/${encodeURIComponent(q.id)}/answer`, {
-              method: "POST", headers: { "content-type": "application/json" },
+              method: "POST",
+              headers: { "content-type": "application/json" },
               body: JSON.stringify({ answer: input.value.trim() }),
             });
             refreshState();
           };
-          host.append(el("div", { class: "q" }, el("div", { class: "body", text: q.body }), input, btn));
+          host.append(
+            el("div", { class: "q" }, el("div", { class: "body", text: q.body }), input, btn),
+          );
         }
       }
 
@@ -275,10 +503,15 @@
         const log = document.getElementById("log");
         const time = new Date(ev.at).toLocaleTimeString();
         const payload = ev.payload ? JSON.stringify(ev.payload) : "";
-        log.append(el("div", { class: "ev" },
-          el("span", { class: "t", text: time }),
-          el("span", { class: "ty", text: ev.type }),
-          el("span", { class: "p", text: payload })));
+        log.append(
+          el(
+            "div",
+            { class: "ev" },
+            el("span", { class: "t", text: time }),
+            el("span", { class: "ty", text: ev.type }),
+            el("span", { class: "p", text: payload }),
+          ),
+        );
         log.scrollTop = log.scrollHeight;
       }
 
@@ -307,17 +540,33 @@
         setConn("poll", "polling");
         pollTimer = setInterval(async () => {
           const q = lastEventId ? `&sinceId=${lastEventId}` : "";
-          try { for (const ev of await api(`/api/events?projectId=${projectId}${q}`)) appendEvent(ev); }
-          catch { setConn("down", "disconnected"); }
+          try {
+            for (const ev of await api(`/api/events?projectId=${projectId}${q}`)) appendEvent(ev);
+          } catch {
+            setConn("down", "disconnected");
+          }
         }, 3000);
       }
-      function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+      function stopPolling() {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
 
       function startStream() {
         const es = new EventSource(`/api/stream?projectId=${projectId}`);
-        es.onopen = () => { stopPolling(); setConn("live", "live (SSE)"); };
+        es.onopen = () => {
+          stopPolling();
+          setConn("live", "live (SSE)");
+        };
         es.onmessage = (e) => appendEvent(JSON.parse(e.data));
-        es.onerror = () => { setConn("down", "SSE dropped — polling"); es.close(); startPolling(); setTimeout(startStream, 5000); };
+        es.onerror = () => {
+          setConn("down", "SSE dropped — polling");
+          es.close();
+          startPolling();
+          setTimeout(startStream, 5000);
+        };
       }
 
       async function main() {
@@ -329,7 +578,8 @@
           const ta = document.getElementById("pointer-body");
           if (!ta.value.trim()) return;
           await fetch("/api/pointers", {
-            method: "POST", headers: { "content-type": "application/json" },
+            method: "POST",
+            headers: { "content-type": "application/json" },
             body: JSON.stringify({ projectId, body: ta.value.trim() }),
           });
           ta.value = "";
