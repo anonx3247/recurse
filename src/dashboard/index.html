@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>recurse — dashboard</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --panel: #161b22;
+        --border: #30363d;
+        --fg: #e6edf3;
+        --muted: #8b949e;
+        --accent: #58a6ff;
+        --good: #3fb950;
+        --bad: #f85149;
+        --warn: #d29922;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      header {
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+      }
+      header .obj {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      header .conn {
+        margin-left: auto;
+        font-size: 12px;
+      }
+      .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+      .dot.live {
+        background: var(--good);
+      }
+      .dot.poll {
+        background: var(--warn);
+      }
+      .dot.down {
+        background: var(--bad);
+      }
+      main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        padding: 16px 20px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        min-width: 0;
+      }
+      .panel h2 {
+        font-size: 13px;
+        margin: 0 0 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .full {
+        grid-column: 1 / -1;
+      }
+      .counts {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .counts .c {
+        text-align: center;
+      }
+      .counts .n {
+        font-size: 20px;
+        font-weight: bold;
+      }
+      .counts .l {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+      .chart h3 {
+        font-size: 12px;
+        margin: 0 0 2px;
+      }
+      .chart .latest {
+        font-size: 12px;
+        color: var(--accent);
+      }
+      canvas {
+        width: 100%;
+        height: 120px;
+        display: block;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      th {
+        color: var(--muted);
+        font-weight: normal;
+      }
+      .badge {
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 11px;
+        border: 1px solid var(--border);
+      }
+      .badge.merged {
+        color: var(--good);
+        border-color: var(--good);
+      }
+      .badge.rejected,
+      .badge.abandoned {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .badge.in_review,
+      .badge.draft {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      #log {
+        max-height: 320px;
+        overflow-y: auto;
+        font-size: 12px;
+      }
+      #log .ev {
+        padding: 2px 0;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+      }
+      #log .t {
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      #log .ty {
+        color: var(--accent);
+        flex-shrink: 0;
+      }
+      #log .p {
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      textarea,
+      input[type="text"] {
+        width: 100%;
+        background: var(--bg);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        font: inherit;
+      }
+      button {
+        margin-top: 8px;
+        background: var(--accent);
+        color: #0d1117;
+        border: 0;
+        border-radius: 6px;
+        padding: 7px 14px;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button:hover {
+        opacity: 0.9;
+      }
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 4px 0 0;
+      }
+      .q {
+        border-bottom: 1px solid var(--border);
+        padding: 8px 0;
+      }
+      .q .body {
+        margin-bottom: 6px;
+      }
+      ul.plain {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 12px;
+      }
+      ul.plain li {
+        padding: 3px 0;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+      }
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>recurse</h1>
+      <span class="obj" id="objective"></span>
+      <span class="conn"
+        ><span class="dot down" id="conn-dot"></span><span id="conn-text">connecting…</span></span
+      >
+    </header>
+
+    <main>
+      <section class="panel full">
+        <h2>Tasks</h2>
+        <div class="counts" id="counts"></div>
+      </section>
+
+      <section class="panel full">
+        <h2>Metrics</h2>
+        <div class="charts" id="charts"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Live activity</h2>
+        <div id="runs" class="hint"></div>
+        <div id="log"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Changes</h2>
+        <table id="changes">
+          <thead>
+            <tr>
+              <th>title</th>
+              <th>status</th>
+              <th>branch</th>
+              <th>Δ metrics</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>Pointers <span class="hint">— non-blocking guidance</span></h2>
+        <textarea
+          id="pointer-body"
+          rows="3"
+          placeholder="Drop a direction or hint for the system…"
+        ></textarea>
+        <button id="pointer-send">Send pointer</button>
+        <ul class="plain" id="pointers"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>Questions</h2>
+        <div id="questions"></div>
+      </section>
+    </main>
+
+    <script>
+      "use strict";
+      const params = new URLSearchParams(location.search);
+      let projectId = params.get("projectId");
+      let lastEventId = null;
+      const seenEvents = new Set();
+      const api = (p) => fetch(p).then((r) => r.json());
+
+      function el(tag, attrs, ...kids) {
+        const node = document.createElement(tag);
+        for (const k in attrs || {}) {
+          if (k === "class") node.className = attrs[k];
+          else if (k === "text") node.textContent = attrs[k];
+          else node.setAttribute(k, attrs[k]);
+        }
+        for (const kid of kids) node.append(kid);
+        return node;
+      }
+
+      async function pickProject() {
+        if (projectId) return true;
+        const projects = await api("/api/projects");
+        if (!projects.length) return false;
+        projectId = projects[0].id;
+        return true;
+      }
+
+      // ── metric charts (hand-rolled canvas) ──────────────────────────────
+      function drawChart(canvas, samples, spec) {
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.clientWidth,
+          h = canvas.clientHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, w, h);
+        const pad = { l: 38, r: 8, t: 8, b: 18 };
+        const values = samples.map((s) => s.value);
+        if (!values.length) {
+          ctx.fillStyle = "#8b949e";
+          ctx.fillText("no samples yet", pad.l, h / 2);
+          return;
+        }
+        let min = Math.min(...values),
+          max = Math.max(...values);
+        if (min === max) {
+          min -= 1;
+          max += 1;
+        }
+        const px = (i) =>
+          pad.l + (samples.length === 1 ? 0 : (i / (samples.length - 1)) * (w - pad.l - pad.r));
+        const py = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
+        // axes
+        ctx.strokeStyle = "#30363d";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, pad.t);
+        ctx.lineTo(pad.l, h - pad.b);
+        ctx.lineTo(w - pad.r, h - pad.b);
+        ctx.stroke();
+        ctx.fillStyle = "#8b949e";
+        ctx.font = "10px monospace";
+        ctx.fillText(max.toFixed(2), 2, pad.t + 8);
+        ctx.fillText(min.toFixed(2), 2, h - pad.b);
+        // line
+        ctx.strokeStyle = spec && spec.direction === "minimize" ? "#d29922" : "#58a6ff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        samples.forEach((s, i) => {
+          const x = px(i),
+            y = py(s.value);
+          if (i) ctx.lineTo(x, y);
+          else ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+        // last point
+        const lx = px(samples.length - 1),
+          ly = py(values[values.length - 1]);
+        ctx.fillStyle = "#58a6ff";
+        ctx.beginPath();
+        ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Per-section signatures: skip DOM work when the relevant slice is unchanged.
+      const sigs = {};
+      function changed(key, value) {
+        const s = JSON.stringify(value);
+        if (sigs[key] === s) return false;
+        sigs[key] = s;
+        return true;
+      }
+
+      // Create one canvas per metric ONCE; rebuild only when the metric set changes.
+      const charts = new Map(); // key -> { canvas, spec, latestNode, series, sig }
+      function ensureCharts(metrics) {
+        if (
+          !changed(
+            "metricSet",
+            metrics.map((m) => m.key),
+          )
+        )
+          return;
+        const host = document.getElementById("charts");
+        host.innerHTML = "";
+        charts.clear();
+        if (!metrics.length) {
+          host.append(el("div", { class: "empty", text: "no metrics declared" }));
+          return;
+        }
+        for (const spec of metrics) {
+          const canvas = el("canvas");
+          const latestNode = el("div", { class: "latest", text: "latest: —" });
+          host.append(
+            el(
+              "div",
+              { class: "chart" },
+              el("h3", { text: `${spec.label} (${spec.direction})` }),
+              latestNode,
+              canvas,
+            ),
+          );
+          charts.set(spec.key, { canvas, spec, latestNode, series: [], sig: null });
+        }
+      }
+
+      // Re-fetch each series and redraw ONLY when it changed (count + last sample).
+      function updateCharts() {
+        for (const st of charts.values()) {
+          api(`/api/metrics?projectId=${projectId}&key=${encodeURIComponent(st.spec.key)}`)
+            .then((samples) => {
+              const last = samples[samples.length - 1];
+              const sig = `${samples.length}:${last ? (last.id ?? last.recordedAt) : ""}`;
+              if (sig === st.sig) return;
+              st.sig = sig;
+              st.series = samples;
+              const latest = samples.length ? last.value : "—";
+              st.latestNode.textContent = `latest: ${latest}${st.spec.unit ? " " + st.spec.unit : ""}`;
+              drawChart(st.canvas, samples, st.spec);
+            })
+            .catch(() => {});
+        }
+      }
+
+      // Redraw cached series on resize so charts stay crisp without a data poll.
+      window.addEventListener("resize", () => {
+        for (const st of charts.values()) {
+          if (st.series.length) drawChart(st.canvas, st.series, st.spec);
+        }
+      });
+
+      // ── state panels ────────────────────────────────────────────────────
+      const COUNT_KEYS = ["queued", "running", "done", "failed"];
+      const countNodes = {};
+      function initCounts() {
+        const host = document.getElementById("counts");
+        for (const key of COUNT_KEYS) {
+          const n = el("div", { class: "n", text: "0" });
+          countNodes[key] = n;
+          host.append(el("div", { class: "c" }, n, el("div", { class: "l", text: key })));
+        }
+      }
+      function renderCounts(c) {
+        for (const key of COUNT_KEYS) countNodes[key].textContent = String(c[key] ?? 0);
+      }
+
+      function fmtDelta(change) {
+        if (!change.newMetrics) return "—";
+        const base = change.baseMetrics || {};
+        return Object.entries(change.newMetrics)
+          .map(([k, v]) => `${k}: ${base[k] ?? "∅"}→${v}`)
+          .join(", ");
+      }
+
+      // No focusable inputs here, so a full rebuild is fine — but only on change.
+      function renderChanges(changes) {
+        if (!changed("changes", changes)) return;
+        const body = document.querySelector("#changes tbody");
+        body.innerHTML = "";
+        if (!changes.length) {
+          body.append(
+            el("tr", {}, el("td", { colspan: "4", class: "empty", text: "no changes yet" })),
+          );
+          return;
+        }
+        for (const c of changes) {
+          body.append(
+            el(
+              "tr",
+              {},
+              el("td", { text: c.title }),
+              el("td", {}, el("span", { class: `badge ${c.status}`, text: c.status })),
+              el("td", { text: c.branch }),
+              el("td", { text: fmtDelta(c) }),
+            ),
+          );
+        }
+      }
+
+      function renderRuns(runs) {
+        const text = runs.length
+          ? `${runs.length} in-flight: ` + runs.map((r) => r.role).join(", ")
+          : "no agents running";
+        const host = document.getElementById("runs");
+        if (host.textContent !== text) host.textContent = text;
+      }
+
+      function renderPointers(pointers) {
+        if (
+          !changed(
+            "pointers",
+            pointers.map((p) => p.id),
+          )
+        )
+          return;
+        const host = document.getElementById("pointers");
+        host.innerHTML = "";
+        for (const p of pointers) host.append(el("li", { text: p.body }));
+      }
+
+      // Keyed by question id: add new, remove gone, and NEVER recreate existing
+      // nodes — so focus and any in-progress typed answer survive refreshes.
+      const questionNodes = new Map(); // id -> root element
+      function renderQuestions(questions) {
+        const host = document.getElementById("questions");
+        const live = new Set(questions.map((q) => q.id));
+        for (const [id, node] of questionNodes) {
+          if (!live.has(id)) {
+            node.remove();
+            questionNodes.delete(id);
+          }
+        }
+        const empty = host.querySelector(".empty");
+        if (!questions.length) {
+          if (!empty) host.append(el("div", { class: "empty", text: "no open questions" }));
+          return;
+        }
+        if (empty) empty.remove();
+        for (const q of questions) {
+          if (questionNodes.has(q.id)) continue; // preserve input + focus + typed text
+          const input = el("input", { type: "text", placeholder: "Your answer…" });
+          const btn = el("button", { text: "Answer" });
+          btn.onclick = async () => {
+            if (!input.value.trim()) return;
+            await fetch(`/api/questions/${encodeURIComponent(q.id)}/answer`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ answer: input.value.trim() }),
+            });
+            refreshState();
+          };
+          const node = el(
+            "div",
+            { class: "q" },
+            el("div", { class: "body", text: q.body }),
+            input,
+            btn,
+          );
+          questionNodes.set(q.id, node);
+          host.append(node);
+        }
+      }
+
+      function appendEvent(ev) {
+        if (seenEvents.has(ev.id)) return;
+        seenEvents.add(ev.id);
+        lastEventId = ev.id;
+        const log = document.getElementById("log");
+        const time = new Date(ev.at).toLocaleTimeString();
+        const payload = ev.payload ? JSON.stringify(ev.payload) : "";
+        log.append(
+          el(
+            "div",
+            { class: "ev" },
+            el("span", { class: "t", text: time }),
+            el("span", { class: "ty", text: ev.type }),
+            el("span", { class: "p", text: payload }),
+          ),
+        );
+        log.scrollTop = log.scrollHeight;
+      }
+
+      // Diff-based, non-destructive refresh. Coalesced so overlapping triggers
+      // (the 5s poll + SSE events) never run concurrently or duplicate work.
+      let refreshing = false;
+      let refreshQueued = false;
+      async function refreshState() {
+        if (refreshing) {
+          refreshQueued = true;
+          return;
+        }
+        refreshing = true;
+        try {
+          const s = await api(`/api/state?projectId=${projectId}`);
+          if (!s.project) return;
+          const objective = s.project.objective || "";
+          const obj = document.getElementById("objective");
+          if (obj.textContent !== objective) obj.textContent = objective;
+          renderCounts(s.taskCounts);
+          renderChanges(s.changes);
+          renderRuns(s.inFlightRuns);
+          renderPointers(s.pointers);
+          renderQuestions(s.openQuestions);
+          ensureCharts(s.project.metrics || []);
+          updateCharts(); // fire-and-forget; redraws only changed series
+          for (const ev of s.recentEvents) appendEvent(ev);
+        } finally {
+          refreshing = false;
+          if (refreshQueued) {
+            refreshQueued = false;
+            refreshState();
+          }
+        }
+      }
+
+      // Debounce SSE-driven refreshes so a burst of events triggers one refresh.
+      let refreshTimer = null;
+      function scheduleRefresh() {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(refreshState, 300);
+      }
+
+      // ── live stream with polling fallback ───────────────────────────────
+      let pollTimer = null;
+      function setConn(state, text) {
+        document.getElementById("conn-dot").className = `dot ${state}`;
+        document.getElementById("conn-text").textContent = text;
+      }
+
+      function startPolling() {
+        if (pollTimer) return;
+        setConn("poll", "polling");
+        pollTimer = setInterval(async () => {
+          const q = lastEventId ? `&sinceId=${lastEventId}` : "";
+          try {
+            for (const ev of await api(`/api/events?projectId=${projectId}${q}`)) appendEvent(ev);
+          } catch {
+            setConn("down", "disconnected");
+          }
+        }, 3000);
+      }
+      function stopPolling() {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      function startStream() {
+        const es = new EventSource(`/api/stream?projectId=${projectId}`);
+        es.onopen = () => {
+          stopPolling();
+          setConn("live", "live (SSE)");
+        };
+        es.onmessage = (e) => {
+          appendEvent(JSON.parse(e.data));
+          scheduleRefresh();
+        };
+        es.onerror = () => {
+          setConn("down", "SSE dropped — polling");
+          es.close();
+          startPolling();
+          setTimeout(startStream, 5000);
+        };
+      }
+
+      async function main() {
+        if (!(await pickProject())) {
+          document.getElementById("objective").textContent = "no projects found";
+          return;
+        }
+        initCounts();
+        document.getElementById("pointer-send").onclick = async () => {
+          const ta = document.getElementById("pointer-body");
+          if (!ta.value.trim()) return;
+          await fetch("/api/pointers", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ projectId, body: ta.value.trim() }),
+          });
+          ta.value = "";
+          refreshState();
+        };
+        await refreshState();
+        startStream();
+        setInterval(refreshState, 5000);
+      }
+
+      main();
+    </script>
+  </body>
+</html>

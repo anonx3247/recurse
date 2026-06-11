@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "test": "tsx --test tests/*.test.ts",
     "start": "tsx src/cli/run.ts",
+    "dashboard": "tsx src/cli/dashboard.ts",
     "build": "tsc"
   },
   "dependencies": {

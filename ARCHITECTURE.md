@@ -163,12 +163,38 @@ streamed back to the store via `AgentRun.logPath`.
 
 ## Web dashboard
 
-A minimal web dashboard reads straight from the store (no business logic):
+A minimal web dashboard reads straight from the store (no business logic) and is
+deliberately framework-free: a single `node:http` server (`src/dashboard/server.ts`)
+plus one self-contained static `index.html` (vanilla JS, hand-rolled `<canvas>`
+charts, no build step, no npm UI deps). It runs with `tsx` directly.
 
 - metric graphs over time (from `MetricSample`s);
-- live agent logs (from `AgentRun` + event log);
-- the task/idea queue;
+- live agent logs (from `AgentRun` + the append-only event log);
+- the task/idea queue and recent changes;
 - a pointers box to drop directions and a questions panel to answer.
+
+It is **read-mostly**, over the same async `PgStore` (Postgres) the kernel uses.
+Two small write endpoints keep the human-in-the-loop non-blocking:
+
+- `POST /api/pointers` appends a `Pointer`; the scheduler folds unconsumed
+  pointers into the next cycle's seed prompt. The dashboard never drives the
+  kernel here — it only writes.
+- `POST /api/questions/:id/answer` records the answer **and** resumes the
+  suspended agent. A task that asked a question is durably suspended on an Absurd
+  `awaitEvent` (its worker slot freed). So the endpoint routes through the
+  kernel's `answerQuestion(app, store, id, answer)` helper, which writes the
+  store and `emitEvent`s the wake-up channel. The dashboard CLI constructs a
+  minimal Absurd client on the **same pool + queue** as the kernel to do this.
+
+Live updates use **Server-Sent Events** (`GET /api/stream`). The store has no
+pub/sub, so the server polls the event log on a short interval and pushes entries
+with an id newer than the last sent, keeping the socket alive with comment pings
+and cleaning up on disconnect. Clients fall back to polling `/api/events` if the
+stream drops.
+
+Run the kernel and dashboard as two processes against the **same Postgres**
+(`DATABASE_URL`): `DATABASE_URL=… npm start <config>` in one terminal,
+`DATABASE_URL=… npm run dashboard` in another. See the README for details.
 
 ## Component diagram
 
