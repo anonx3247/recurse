@@ -51,8 +51,9 @@ The kernel is **one long-running process that is never idle**. It maintains:
   The queue is **stateful and durable**, backed by
   [Absurd](https://earendil-works.github.io/absurd/) (see below) so in-flight
   work survives restarts and crashes;
-- a **concurrency pool** that it keeps full up to `concurrency` — whenever a slot
-  frees, it pulls the next task and launches an agent;
+- a **concurrency pool** that it keeps full up to `concurrency` — this is just an
+  Absurd background worker started with `startWorker({ concurrency })`; whenever a
+  slot frees it claims the next queued task and runs it;
 - an **event log / state store** — the append-only source of truth that also
   powers the dashboard.
 
@@ -74,13 +75,45 @@ single `absurd.sql` schema — no broker or coordination service.
 
 **One database for everything.** recurse consolidates on a single Postgres
 instance: the `Store` (projects, changes, reviews, metrics, events) and Absurd's
-durable queue/workflow state share the same database, so domain state and in-flight
-work stay transactionally consistent and there is one thing to operate. The store
-is Postgres via drizzle ORM (`pg` / node-postgres, from `DATABASE_URL`; Neon-
-compatible). Tests run fully offline against [PGlite](https://pglite.dev/), a real
-Postgres compiled to WASM that runs in-process — no external server or service
-containers. Actual Absurd integration lands in the kernel-loop PR (sharing this
-same Postgres).
+durable queue/workflow state share the same database **and the same `pg.Pool`**, so
+domain state and in-flight work stay transactionally consistent and there is one
+thing to operate. The store is Postgres via drizzle ORM (`pg` / node-postgres, from
+`DATABASE_URL`; Neon-compatible). Tests run fully offline against
+[PGlite](https://pglite.dev/), a real Postgres compiled to WASM that runs
+in-process — no external server or service containers.
+
+The Absurd SDK does not ship its schema, so recurse vendors `vendor/absurd.sql` and
+applies it once at startup, idempotently (guarded by `to_regnamespace('absurd')`),
+then creates its queue. PGlite applies the same vendored schema with the
+`uuid_ossp` contrib extension, so the durable path is covered by real offline tests
+(see `tests/kernel.absurd.test.ts`).
+
+### How the cycle maps onto Absurd
+
+The pure cycle logic (`src/kernel/phases.ts` + `mergeGate.ts`) is independent of any
+scheduler and is unit-tested fully offline. The durable shell (`src/kernel/tasks.ts`
++ `kernel.ts`) wraps it:
+
+- **`improve-cycle` task** — one improvement cycle. Each phase is a checkpointed
+  `ctx.step`: **worker** (persist a draft `Change` + `MetricSample`s + `AgentRun`),
+  **review** (persist a `Review`, set the change `in_review`), **gate** (merge or
+  reject per the merge gate). Because steps are checkpoints, a crash resumes from
+  the last completed phase instead of re-running the minutes-long sandbox work; the
+  worker lease (`claimTimeout`, default 1800s) is extended by checkpoints and
+  explicit `ctx.heartbeat()` calls around long sandbox ops. On `request_changes`
+  (under the per-lineage `maxReviewIterations` cap) the gate enqueues a follow-up
+  `Task` and the handler `app.spawn`s another `improve-cycle` for it — the PR-review
+  feedback loop. Failures are caught, mark the `Task`/`AgentRun` failed, and emit
+  `cycle.error` without crashing the worker.
+- **`scheduler-tick` task** — the never-idle guarantee as a self-perpetuating
+  durable cron: `ctx.sleepFor` (suspends without holding a slot), then `ensureWork`
+  (seeds a fallback `improve` Task folding in unconsumed human `Pointer`s if the
+  queue is empty), then it re-spawns itself. The richer **Ideator** plugs in at the
+  marked seam in `ensureWork`.
+- **Non-blocking human-in-the-loop** — `askHuman` persists a `Question` and
+  `ctx.awaitEvent("answer:<id>")`; the run suspends (freeing the slot) until the
+  dashboard calls `answerQuestion`, which emits that event. Events are
+  first-write-wins, so the answer is race-free.
 
 ## Agents
 
