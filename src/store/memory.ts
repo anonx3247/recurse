@@ -40,21 +40,21 @@ export class MemoryStore implements Store {
     return new Date().toISOString();
   }
 
-  createProject(input: NewProject): Project {
+  async createProject(input: NewProject): Promise<Project> {
     const project: Project = { ...input, id: randomUUID(), createdAt: this.now() };
     this.projects.push(project);
     return project;
   }
 
-  getProject(id: string): Project | undefined {
+  async getProject(id: string): Promise<Project | undefined> {
     return this.projects.find((p) => p.id === id);
   }
 
-  listProjects(): Project[] {
+  async listProjects(): Promise<Project[]> {
     return [...this.projects];
   }
 
-  createTask(input: NewTask): Task {
+  async createTask(input: NewTask): Promise<Task> {
     const task: Task = {
       ...input,
       status: input.status ?? "queued",
@@ -65,72 +65,72 @@ export class MemoryStore implements Store {
     return task;
   }
 
-  getTask(id: string): Task | undefined {
+  async getTask(id: string): Promise<Task | undefined> {
     return this.tasks.find((t) => t.id === id);
   }
 
-  updateTaskStatus(id: string, status: TaskStatus): Task {
+  async updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
     const task = this.tasks.find((t) => t.id === id);
     if (!task) throw new Error(`Task not found: ${id}`);
     task.status = status;
     return task;
   }
 
-  listTasks(projectId: string, filter?: { status?: TaskStatus }): Task[] {
+  async listTasks(projectId: string, filter?: { status?: TaskStatus }): Promise<Task[]> {
     return this.tasks.filter(
       (t) => t.projectId === projectId && (!filter?.status || t.status === filter.status),
     );
   }
 
-  createChange(input: NewChange): Change {
+  async createChange(input: NewChange): Promise<Change> {
     const change: Change = { ...input, id: randomUUID(), createdAt: this.now() };
     this.changes.push(change);
     return change;
   }
 
-  getChange(id: string): Change | undefined {
+  async getChange(id: string): Promise<Change | undefined> {
     return this.changes.find((c) => c.id === id);
   }
 
-  updateChange(id: string, patch: Partial<NewChange>): Change {
+  async updateChange(id: string, patch: Partial<NewChange>): Promise<Change> {
     const change = this.changes.find((c) => c.id === id);
     if (!change) throw new Error(`Change not found: ${id}`);
     Object.assign(change, patch);
     return change;
   }
 
-  listChanges(projectId: string): Change[] {
+  async listChanges(projectId: string): Promise<Change[]> {
     return this.changes.filter((c) => c.projectId === projectId);
   }
 
-  createReview(input: NewReview): Review {
+  async createReview(input: NewReview): Promise<Review> {
     const review: Review = { ...input, id: randomUUID(), createdAt: this.now() };
     this.reviews.push(review);
     return review;
   }
 
-  listReviews(changeId: string): Review[] {
+  async listReviews(changeId: string): Promise<Review[]> {
     return this.reviews.filter((r) => r.changeId === changeId);
   }
 
-  createAgentRun(input: NewAgentRun): AgentRun {
+  async createAgentRun(input: NewAgentRun): Promise<AgentRun> {
     const run: AgentRun = { ...input, id: randomUUID(), startedAt: this.now() };
     this.agentRuns.push(run);
     return run;
   }
 
-  updateAgentRun(id: string, patch: Partial<NewAgentRun>): AgentRun {
+  async updateAgentRun(id: string, patch: Partial<NewAgentRun>): Promise<AgentRun> {
     const run = this.agentRuns.find((r) => r.id === id);
     if (!run) throw new Error(`Agent run not found: ${id}`);
     Object.assign(run, patch);
     return run;
   }
 
-  listAgentRuns(projectId: string): AgentRun[] {
+  async listAgentRuns(projectId: string): Promise<AgentRun[]> {
     return this.agentRuns.filter((r) => r.projectId === projectId);
   }
 
-  createPointer(input: NewPointer): Pointer {
+  async createPointer(input: NewPointer): Promise<Pointer> {
     const pointer: Pointer = {
       ...input,
       fromHuman: true,
@@ -141,7 +141,7 @@ export class MemoryStore implements Store {
     return pointer;
   }
 
-  listPointers(projectId: string, filter?: { consumed?: boolean }): Pointer[] {
+  async listPointers(projectId: string, filter?: { consumed?: boolean }): Promise<Pointer[]> {
     return this.pointers.filter((p) => {
       if (p.projectId !== projectId) return false;
       if (filter?.consumed === true) return p.consumedAt !== undefined;
@@ -150,7 +150,7 @@ export class MemoryStore implements Store {
     });
   }
 
-  createQuestion(input: NewQuestion): Question {
+  async createQuestion(input: NewQuestion): Promise<Question> {
     const question: Question = {
       ...input,
       status: "open",
@@ -161,7 +161,7 @@ export class MemoryStore implements Store {
     return question;
   }
 
-  answerQuestion(id: string, answer: string): Question {
+  async answerQuestion(id: string, answer: string): Promise<Question> {
     const question = this.questions.find((q) => q.id === id);
     if (!question) throw new Error(`Question not found: ${id}`);
     question.answer = answer;
@@ -170,27 +170,27 @@ export class MemoryStore implements Store {
     return question;
   }
 
-  listQuestions(projectId: string): Question[] {
+  async listQuestions(projectId: string): Promise<Question[]> {
     return this.questions.filter((q) => q.projectId === projectId);
   }
 
-  recordMetricSample(input: NewMetricSample): MetricSample {
+  async recordMetricSample(input: NewMetricSample): Promise<MetricSample> {
     const sample: MetricSample = { ...input, id: randomUUID(), recordedAt: this.now() };
     this.metricSamples.push(sample);
     return sample;
   }
 
-  listMetricSamples(projectId: string, metricKey: string): MetricSample[] {
+  async listMetricSamples(projectId: string, metricKey: string): Promise<MetricSample[]> {
     return this.metricSamples.filter((s) => s.projectId === projectId && s.metricKey === metricKey);
   }
 
-  appendEvent(entry: NewEvent): EventLogEntry {
+  async appendEvent(entry: NewEvent): Promise<EventLogEntry> {
     const event: EventLogEntry = { ...entry, id: randomUUID(), at: this.now() };
     this.events.push(event);
     return event;
   }
 
-  listEvents(projectId: string, filter?: { sinceId?: string }): EventLogEntry[] {
+  async listEvents(projectId: string, filter?: { sinceId?: string }): Promise<EventLogEntry[]> {
     let events = this.events.filter((e) => e.projectId === projectId);
     if (filter?.sinceId) {
       const index = events.findIndex((e) => e.id === filter.sinceId);
@@ -199,7 +199,7 @@ export class MemoryStore implements Store {
     return events;
   }
 
-  close(): void {
+  async close(): Promise<void> {
     // no-op
   }
 }

@@ -1,3 +1,3 @@
 export * from "./store";
 export { MemoryStore } from "./memory";
-export { SqliteStore } from "./sqlite";
+export { PgStore, type PgDb } from "./pg";
