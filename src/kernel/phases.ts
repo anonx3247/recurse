@@ -13,10 +13,12 @@
 import { setTimeout as delay } from "node:timers/promises";
 import {
   type AgentInvoker,
+  type ChangeOutcome,
   type IntegrateBranch,
   type IntegrateMode,
   type PushBranch,
   integratorForMode,
+  runIdeator,
   runReviewer,
   runWorker,
 } from "../agent/index";
@@ -46,6 +48,12 @@ export interface PhaseOptions {
   gatePolicy?: GatePolicy;
   /** Max review→worker feedback iterations per lineage. Default 3. */
   maxReviewIterations?: number;
+  /** How many ideas the ideator proposes per run. Default 3. */
+  ideasPerRun?: number;
+  /** Recent change outcomes to summarize for the ideator. Default 5. */
+  ideatorHistoryLimit?: number;
+  /** Max open (queued/running) ideator tasks before skipping the ideator. Default 6. */
+  maxOpenIdeatorTasks?: number;
   /** Sandbox snapshot to start agents from (production: the recurse snapshot). */
   snapshot?: string;
   /** Repo checkout dir inside the sandbox. Defaults to the runner's default. */
@@ -70,6 +78,11 @@ export interface CycleDeps {
   workerInvoker: AgentInvoker;
   /** Drives the Reviewer agent. */
   reviewerInvoker: AgentInvoker;
+  /**
+   * Drives the Ideator agent. Optional: when absent, the scheduler's never-idle
+   * seam falls back to a generic seed task instead of generated ideas.
+   */
+  ideatorInvoker?: AgentInvoker;
   /** Provider keys / model config injected into each sandbox at create time. */
   sandboxEnv: () => Record<string, string>;
   clock?: Clock;
@@ -87,6 +100,7 @@ export const KernelEvents = {
   branchIntegrated: "branch.integrated",
   changeRejected: "change.rejected",
   followupEnqueued: "followup.enqueued",
+  ideaGenerated: "idea.generated",
   cycleError: "cycle.error",
 } as const;
 
@@ -182,6 +196,81 @@ export async function runWorkerPhase(
     await store.updateAgentRun(run.id, { status: "failed", endedAt: clock.now() });
     throw err;
   }
+}
+
+/**
+ * Ideator phase: run the Ideator agent (its own `ideator` AgentRun), then persist
+ * each proposed idea as a queued `improve` Task (source `ideator`) and emit an
+ * `idea.generated` event per task. Returns the created tasks so the durable layer
+ * can spawn a cycle for each. Requires {@link CycleDeps.ideatorInvoker}.
+ */
+export async function runIdeatorPhase(deps: CycleDeps, project: Project): Promise<Task[]> {
+  const { store } = deps;
+  const clock = clockOf(deps);
+  if (!deps.ideatorInvoker) return [];
+
+  const baseline = await currentBaseline(store, project.id);
+  const historyLimit = deps.options?.ideatorHistoryLimit ?? 5;
+  const recentChanges = await recentOutcomes(store, project.id, historyLimit);
+  const pointers = (await store.listPointers(project.id, { consumed: false })).map((p) => p.body);
+
+  const run = await store.createAgentRun({ projectId: project.id, role: "ideator", status: "running" });
+  try {
+    const result = await runIdeator({
+      runner: deps.runner,
+      invoker: deps.ideatorInvoker,
+      project,
+      baseline,
+      recentChanges,
+      pointers,
+      count: deps.options?.ideasPerRun ?? 3,
+      env: deps.sandboxEnv(),
+      snapshot: deps.options?.snapshot,
+      workdir: deps.options?.workdir,
+    });
+
+    const tasks: Task[] = [];
+    for (const idea of result.ideas) {
+      const task = await store.createTask({
+        projectId: project.id,
+        kind: "improve",
+        title: idea.title,
+        prompt: idea.prompt,
+        priority: idea.priority,
+        source: "ideator",
+      });
+      await emit(store, project.id, KernelEvents.ideaGenerated, {
+        taskId: task.id,
+        title: task.title,
+        priority: task.priority,
+      });
+      tasks.push(task);
+    }
+
+    await store.updateAgentRun(run.id, {
+      status: "succeeded",
+      endedAt: clock.now(),
+      sandboxId: result.handleId,
+    });
+    return tasks;
+  } catch (err) {
+    await store.updateAgentRun(run.id, { status: "failed", endedAt: clock.now() });
+    throw err;
+  }
+}
+
+/** Summarize a project's most recent change outcomes (newest last) for the ideator. */
+async function recentOutcomes(
+  store: Store,
+  projectId: string,
+  limit: number,
+): Promise<ChangeOutcome[]> {
+  const changes = await store.listChanges(projectId);
+  return changes.slice(-limit).map((c) => ({
+    title: c.title,
+    status: c.status,
+    newMetrics: c.newMetrics,
+  }));
 }
 
 /** Review phase: set the change in_review, run the reviewer, persist the Review. */

@@ -106,10 +106,18 @@ scheduler and is unit-tested fully offline. The durable shell (`src/kernel/tasks
   feedback loop. Failures are caught, mark the `Task`/`AgentRun` failed, and emit
   `cycle.error` without crashing the worker.
 - **`scheduler-tick` task** — the never-idle guarantee as a self-perpetuating
-  durable cron: `ctx.sleepFor` (suspends without holding a slot), then `ensureWork`
-  (seeds a fallback `improve` Task folding in unconsumed human `Pointer`s if the
-  queue is empty), then it re-spawns itself. The richer **Ideator** plugs in at the
-  marked seam in `ensureWork`.
+  durable cron: `ctx.sleepFor` (suspends without holding a slot), then
+  `ensureWorkWithIdeator` (the never-idle seam), then it re-spawns itself.
+  `ensureWorkWithIdeator` closes the loop: when **no `improve` work is queued** it
+  runs the **Ideator** (its own checkpointed `ctx.step` + `ideator` `AgentRun`) to
+  generate several history/metric-aware `improve` Tasks, spawns an `improve-cycle`
+  for each, and only falls back to `ensureWork`'s single generic seed (folding in
+  unconsumed human `Pointer`s) when the ideator is unavailable or produced nothing.
+  Generation is gated so the engine never runs away: it skips when improvement work
+  already exists and caps the number of open (queued/running) ideator Tasks
+  (`maxOpenIdeatorTasks`, default 6). This is the **closed never-idle loop** — when
+  the queue empties the system invents its own next work instead of waiting for a
+  human to seed it.
 - **Non-blocking human-in-the-loop** — `askHuman` persists a `Question` and
   `ctx.awaitEvent("answer:<id>")`; the run suspends (freeing the slot) until the
   dashboard calls `answerQuestion`, which emits that event. Events are
@@ -124,9 +132,19 @@ Every agent is a `pi` run inside its own sandbox. Four roles:
 - **Reviewer** — reviews a Change like a PR: structured `ReviewComment`s plus a
   verdict (`approve` / `request_changes` / `comment`). `request_changes` loops a
   follow-up task back to a worker, exactly like a PR review cycle.
-- **Ideator** — scheduled (every `ideaIntervalMinutes`). Reads history, metric
-  trends, and the human pointers inbox, and proposes novel directions as new
-  `idea` tasks.
+- **Ideator** — the never-idle work generator (`src/agent/ideator.ts`,
+  `runIdeator`). Driven through the injected `AgentInvoker` exactly like the
+  worker/reviewer: it runs a `pi` agent in a sandbox with a focused prompt
+  summarizing the objective, current baseline metrics, recent merged/rejected
+  change outcomes, and unconsumed human pointers, and asks for N (default 3)
+  concrete, diverse improvement ideas as **structured output** (`title` +
+  worker-ready `prompt` + `priority`) written to `.recurse/ideas.json`. Parsing is
+  prose-tolerant (it recovers the last JSON object, like the eval-output contract)
+  and never throws — malformed/missing output degrades to an empty list so the
+  scheduler falls back to a generic seed. Each idea persists as an `improve` Task
+  (source `ideator`) and emits an `idea.generated` event for the dashboard. It
+  runs at the `ensureWorkWithIdeator` seam whenever the queue would otherwise go
+  idle (see Kernel above), and is deterministic offline via `FakeAgentInvoker`.
 - **Skill-distiller** — when something works, writes/updates
   `.agents/skills/*/SKILL.md` in the repo so future agents inherit what worked.
   This is how the system compounds.

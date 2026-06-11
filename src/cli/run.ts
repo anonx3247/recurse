@@ -86,6 +86,7 @@ async function main(): Promise<void> {
     runner: getSandboxRunner(),
     workerInvoker: new PiAgentInvoker(),
     reviewerInvoker: new PiAgentInvoker(),
+    ideatorInvoker: new PiAgentInvoker(),
     sandboxEnv,
     logger: (line) => process.stderr.write(`[kernel] ${line}\n`),
   });
