@@ -4,8 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type AgentInvoker, FakeAgentInvoker } from "../src/agent/index.js";
-import type { MetricSpec, Project, Review } from "../src/core/index.js";
+import { type AgentInvoker, FakeAgentInvoker } from "../src/agent/index";
+import type { MetricSpec, Project, Review } from "../src/core/index";
 import {
   Kernel,
   type KernelOptions,
@@ -14,9 +14,9 @@ import {
   evaluateGate,
   isReviewApproved,
   pickNextTask,
-} from "../src/kernel/index.js";
-import { LocalSandboxRunner } from "../src/sandbox/index.js";
-import { MemoryStore } from "../src/store/index.js";
+} from "../src/kernel/index";
+import { LocalSandboxRunner } from "../src/sandbox/index";
+import { MemoryStore } from "../src/store/index";
 
 /**
  * Fully offline kernel tests: a real `MemoryStore` + `LocalSandboxRunner` plus
@@ -173,16 +173,16 @@ test("evaluateGate / isReviewApproved: blocker comments block approval", () => {
 
 // ── scheduler (never-idle) ──────────────────────────────────────────────────
 
-test("ensureWork: seeds a task only when the queue is empty", () => {
+test("ensureWork: seeds a task only when the queue is empty", async () => {
   const store = new MemoryStore();
-  const project = store.createProject(fixtureProject("x"));
-  const seeded = ensureWork(store, project);
+  const project = await store.createProject(fixtureProject("x"));
+  const seeded = await ensureWork(store, project);
   assert.ok(seeded);
   assert.equal(seeded.source, "scheduler");
-  assert.equal(store.listTasks(project.id, { status: "queued" }).length, 1);
+  assert.equal((await store.listTasks(project.id, { status: "queued" })).length, 1);
   // Already has queued work → no-op.
-  assert.equal(ensureWork(store, project), undefined);
-  assert.equal(pickNextTask(store, project.id)?.id, seeded.id);
+  assert.equal(await ensureWork(store, project), undefined);
+  assert.equal((await pickNextTask(store, project.id))?.id, seeded.id);
 });
 
 // ── kernel cycles (end to end, offline) ─────────────────────────────────────
@@ -191,7 +191,7 @@ test("runCycle happy path: improving change merges and updates baseline", async 
   const repo = await makeFixtureRepo("0.5");
   try {
     const store = new MemoryStore();
-    const project = store.createProject(fixtureProject(repo));
+    const project = await store.createProject(fixtureProject(repo));
     const kernel = makeKernel(
       store,
       workerSetting(0.9),
@@ -200,15 +200,15 @@ test("runCycle happy path: improving change merges and updates baseline", async 
 
     await kernel.runCycle(project.id);
 
-    const changes = store.listChanges(project.id);
+    const changes = await store.listChanges(project.id);
     assert.equal(changes.length, 1);
     assert.equal(changes[0].status, "merged");
     assert.deepEqual(changes[0].newMetrics, { score: 0.9 });
     // Baseline was empty on first run; the merged change now sets it.
-    const samples = store.listMetricSamples(project.id, "score");
+    const samples = await store.listMetricSamples(project.id, "score");
     assert.equal(samples.length, 1);
     assert.equal(samples[0].changeId, changes[0].id);
-    const types = store.listEvents(project.id).map((e) => e.type);
+    const types = (await store.listEvents(project.id)).map((e) => e.type);
     assert.ok(types.includes("change.merged"));
   } finally {
     await rm(repo, { recursive: true, force: true });
@@ -219,9 +219,9 @@ test("runCycle: regression is blocked even when the review approves", async () =
   const repo = await makeFixtureRepo("0.5");
   try {
     const store = new MemoryStore();
-    const project = store.createProject(fixtureProject(repo));
+    const project = await store.createProject(fixtureProject(repo));
     // Seed a baseline by recording a prior merged change at score 0.8.
-    store.createChange({
+    await store.createChange({
       projectId: project.id,
       taskId: "seed",
       branch: "recurse/seed",
@@ -238,11 +238,11 @@ test("runCycle: regression is blocked even when the review approves", async () =
     );
     await kernel.runCycle(project.id);
 
-    const change = store.listChanges(project.id).find((c) => c.branch !== "recurse/seed");
+    const change = (await store.listChanges(project.id)).find((c) => c.branch !== "recurse/seed");
     assert.ok(change);
     assert.notEqual(change.status, "merged");
     assert.equal(change.status, "abandoned");
-    assert.ok(store.listEvents(project.id).some((e) => e.type === "change.rejected"));
+    assert.ok((await store.listEvents(project.id)).some((e) => e.type === "change.rejected"));
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
@@ -252,7 +252,7 @@ test("runCycle: request_changes enqueues a capped follow-up loop", async () => {
   const repo = await makeFixtureRepo("0.5");
   try {
     const store = new MemoryStore();
-    const project = store.createProject(fixtureProject(repo));
+    const project = await store.createProject(fixtureProject(repo));
     const kernel = makeKernel(
       store,
       workerSetting(0.9),
@@ -263,7 +263,7 @@ test("runCycle: request_changes enqueues a capped follow-up loop", async () => {
     // Drive one lineage to its cap: seed → follow-up → follow-up, then stop.
     for (let i = 0; i < 3; i++) await kernel.runCycle(project.id);
 
-    const reviewTasks = store.listTasks(project.id).filter((t) => t.source === "review");
+    const reviewTasks = (await store.listTasks(project.id)).filter((t) => t.source === "review");
     assert.ok(reviewTasks.length > 0);
     assert.ok(reviewTasks.every((t) => t.parentChangeId));
     // Lineage capped at maxReviewIterations follow-ups.
@@ -277,7 +277,7 @@ test("start: bounded by maxCycles and stoppable", async () => {
   const repo = await makeFixtureRepo("0.5");
   try {
     const store = new MemoryStore();
-    const project = store.createProject(fixtureProject(repo, 2));
+    const project = await store.createProject(fixtureProject(repo, 1));
     const kernel = makeKernel(
       store,
       workerSetting(0.9),
@@ -285,8 +285,8 @@ test("start: bounded by maxCycles and stoppable", async () => {
     );
 
     await kernel.start(project.id, { maxCycles: 2 });
-    // Two cycles ran; at least the first merged and set a baseline.
-    assert.equal(store.listChanges(project.id).length, 2);
+    // Two cycles ran sequentially; the first merged and set the baseline.
+    assert.equal((await store.listChanges(project.id)).length, 2);
   } finally {
     await rm(repo, { recursive: true, force: true });
   }

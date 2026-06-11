@@ -1,21 +1,22 @@
 /**
  * Real autonomous entrypoint: load a `recurse.config.json`, upsert the project
- * into a persistent {@link SqliteStore}, and start the {@link Kernel} with the
- * real sandbox runner + `pi` agent invoker for both roles.
+ * into a persistent {@link PgStore}, and start the {@link Kernel} with the real
+ * sandbox runner + `pi` agent invoker for both roles.
  *
- * Usage: `npm start <configPath> [sqlitePath]`
+ * Usage: `npm start <configPath>`
  *
- * This needs provider keys (e.g. `ANTHROPIC_API_KEY`) and, for real sandboxes,
- * `DAYTONA_API_KEY`. It is deliberately NOT exercised in tests.
+ * This needs `DATABASE_URL` (Postgres) and provider keys (e.g.
+ * `ANTHROPIC_API_KEY`) and, for real sandboxes, `DAYTONA_API_KEY`. It is
+ * deliberately NOT exercised in tests.
  */
 
-import { PiAgentInvoker } from "../agent/index.js";
-import { loadConfig } from "../core/index.js";
-import type { Project } from "../core/types.js";
-import { Kernel } from "../kernel/index.js";
-import { getSandboxRunner } from "../sandbox/index.js";
-import { SqliteStore } from "../store/index.js";
-import type { Store } from "../store/index.js";
+import { PiAgentInvoker } from "../agent/index";
+import { loadConfig } from "../core/index";
+import type { Project } from "../core/types";
+import { Kernel } from "../kernel/index";
+import { getSandboxRunner } from "../sandbox/index";
+import { PgStore } from "../store/index";
+import type { Store } from "../store/index";
 
 /** Provider/model env vars forwarded into every sandbox, read from the host. */
 const SANDBOX_ENV_KEYS = [
@@ -36,9 +37,9 @@ function sandboxEnv(): Record<string, string> {
 }
 
 /** Find an existing project by name, or create one from the loaded config. */
-function upsertProject(store: Store, configPath: string): Project {
+async function upsertProject(store: Store, configPath: string): Promise<Project> {
   const config = loadConfig(configPath);
-  const existing = store.listProjects().find((p) => p.name === config.name);
+  const existing = (await store.listProjects()).find((p) => p.name === config.name);
   if (existing) return existing;
   return store.createProject({
     name: config.name,
@@ -52,14 +53,14 @@ function upsertProject(store: Store, configPath: string): Project {
 }
 
 async function main(): Promise<void> {
-  const [configPath, sqlitePath = "recurse.sqlite"] = process.argv.slice(2);
+  const [configPath] = process.argv.slice(2);
   if (!configPath) {
-    process.stderr.write("usage: npm start <configPath> [sqlitePath]\n");
+    process.stderr.write("usage: npm start <configPath>\n");
     process.exit(2);
   }
 
-  const store = new SqliteStore(sqlitePath);
-  const project = upsertProject(store, configPath);
+  const store = await PgStore.fromDatabaseUrl();
+  const project = await upsertProject(store, configPath);
 
   const kernel = new Kernel({
     store,
@@ -76,7 +77,7 @@ async function main(): Promise<void> {
 
   process.stderr.write(`[kernel] starting project "${project.name}" (${project.id})\n`);
   await kernel.start(project.id);
-  store.close();
+  await store.close();
 }
 
 main().catch((err) => {

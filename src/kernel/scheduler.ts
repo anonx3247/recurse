@@ -7,37 +7,49 @@
  * the fallback prompt with history/metric-trend-aware ideas at the marked seam.
  */
 
-import type { Project, Task } from "../core/types.js";
-import type { Store } from "../store/index.js";
+import type { Pointer, Project, Task } from "../core/types";
+import type { Store } from "../store/index";
 
 /**
  * Guarantee there is at least one `queued` task for `project`. If the queue is
  * non-empty this is a no-op (returns `undefined`); otherwise it creates and
- * returns a fallback `improve` task derived from the objective.
+ * returns a fallback `improve` task derived from the objective, folding any
+ * unconsumed {@link Pointer} hints into the seed prompt.
  */
-export function ensureWork(store: Store, project: Project): Task | undefined {
-  const queued = store.listTasks(project.id, { status: "queued" });
+export async function ensureWork(store: Store, project: Project): Promise<Task | undefined> {
+  const queued = await store.listTasks(project.id, { status: "queued" });
   if (queued.length > 0) return undefined;
 
   // SEAM: a later PR plugs the Ideator agent in here to generate richer,
   // history-aware tasks. Until then we seed a generic high-leverage improvement
-  // so the kernel never idles.
+  // (optionally steered by human pointers) so the kernel never idles.
+  const pointers = await store.listPointers(project.id, { consumed: false });
   return store.createTask({
     projectId: project.id,
     kind: "improve",
     title: "Scheduled improvement",
-    prompt: `Make one focused improvement toward: ${project.objective}. Prefer the highest-leverage change and keep the diff small.`,
+    prompt: buildSeedPrompt(project, pointers),
     priority: 0,
     source: "scheduler",
   });
+}
+
+/** Compose the fallback seed prompt, appending any human pointer hints. */
+function buildSeedPrompt(project: Project, pointers: Pointer[]): string {
+  let prompt = `Make one focused improvement toward: ${project.objective}. Prefer the highest-leverage change and keep the diff small.`;
+  if (pointers.length > 0) {
+    const hints = pointers.map((p) => `- ${p.body}`).join("\n");
+    prompt += `\n\nHuman pointers to consider:\n${hints}`;
+  }
+  return prompt;
 }
 
 /**
  * Pick the next task to run: the highest-priority `queued` task, breaking ties
  * by creation order (oldest first). Returns `undefined` when the queue is empty.
  */
-export function pickNextTask(store: Store, projectId: string): Task | undefined {
-  const queued = store.listTasks(projectId, { status: "queued" });
+export async function pickNextTask(store: Store, projectId: string): Promise<Task | undefined> {
+  const queued = await store.listTasks(projectId, { status: "queued" });
   if (queued.length === 0) return undefined;
   return [...queued].sort(
     (a, b) => b.priority - a.priority || a.createdAt.localeCompare(b.createdAt),

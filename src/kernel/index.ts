@@ -6,6 +6,6 @@
  * with the store, sandbox runner, and agent invokers.
  */
 
-export * from "./kernel.js";
-export * from "./mergeGate.js";
-export * from "./scheduler.js";
+export * from "./kernel";
+export * from "./mergeGate";
+export * from "./scheduler";

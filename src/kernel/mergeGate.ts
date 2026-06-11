@@ -5,7 +5,7 @@
  * heavily unit-tested; the {@link Kernel} merely composes them.
  */
 
-import type { MetricSpec, Review, ReviewComment, ReviewVerdict } from "../core/types.js";
+import type { MetricSpec, Review, ReviewComment, ReviewVerdict } from "../core/types";
 
 /** Outcome of comparing a change's new metrics against a baseline. */
 export interface MetricComparison {

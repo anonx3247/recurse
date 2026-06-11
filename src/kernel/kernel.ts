@@ -14,12 +14,12 @@
  */
 
 import { setTimeout as delay } from "node:timers/promises";
-import { type AgentInvoker, type PushBranch, runReviewer, runWorker } from "../agent/index.js";
-import type { Change, Project, Review, Task } from "../core/types.js";
-import type { SandboxRunner } from "../sandbox/index.js";
-import type { Store } from "../store/index.js";
-import { type GatePolicy, compareMetrics, defaultGatePolicy, evaluateGate } from "./mergeGate.js";
-import { ensureWork, pickNextTask } from "./scheduler.js";
+import { type AgentInvoker, type PushBranch, runReviewer, runWorker } from "../agent/index";
+import type { Change, Project, Review, Task } from "../core/types";
+import type { SandboxRunner } from "../sandbox/index";
+import type { Store } from "../store/index";
+import { type GatePolicy, compareMetrics, defaultGatePolicy, evaluateGate } from "./mergeGate";
+import { ensureWork, pickNextTask } from "./scheduler";
 
 /** Wall-clock + sleep seam, injectable so tests stay instant and deterministic. */
 export interface Clock {
@@ -105,7 +105,7 @@ export class Kernel {
    * (used by tests); each started cycle counts toward the bound.
    */
   async start(projectId: string, opts: { maxCycles?: number } = {}): Promise<void> {
-    const project = this.requireProject(projectId);
+    const project = await this.requireProject(projectId);
     this.running = true;
     const inFlight = new Set<Promise<void>>();
     let started = 0;
@@ -140,34 +140,34 @@ export class Kernel {
    */
   async runCycle(projectId: string): Promise<void> {
     const { store } = this.deps;
-    const project = this.requireProject(projectId);
+    const project = await this.requireProject(projectId);
 
-    ensureWork(store, project);
-    const task = pickNextTask(store, projectId);
+    await ensureWork(store, project);
+    const task = await pickNextTask(store, projectId);
     if (!task) return;
 
-    store.updateTaskStatus(task.id, "running");
-    this.emit(projectId, KernelEvents.taskStarted, { taskId: task.id, kind: task.kind });
+    await store.updateTaskStatus(task.id, "running");
+    await this.emit(projectId, KernelEvents.taskStarted, { taskId: task.id, kind: task.kind });
 
     try {
       const change = await this.workerPhase(project, task);
       const review = await this.reviewPhase(project, change);
-      this.applyGate(project, task, change, review);
-      store.updateTaskStatus(task.id, "done");
+      await this.applyGate(project, task, change, review);
+      await store.updateTaskStatus(task.id, "done");
     } catch (err) {
-      store.updateTaskStatus(task.id, "failed");
+      await store.updateTaskStatus(task.id, "failed");
       const message = err instanceof Error ? err.message : String(err);
       this.log(`cycle error for task ${task.id}: ${message}`);
-      this.emit(projectId, KernelEvents.cycleError, { taskId: task.id, error: message });
+      await this.emit(projectId, KernelEvents.cycleError, { taskId: task.id, error: message });
     }
   }
 
   /** Worker phase: run the agent, persist the draft Change + metric samples. */
   private async workerPhase(project: Project, task: Task): Promise<Change> {
     const { store } = this.deps;
-    const baseMetrics = currentBaseline(store, project.id);
+    const baseMetrics = await currentBaseline(store, project.id);
 
-    const run = store.createAgentRun({
+    const run = await store.createAgentRun({
       projectId: project.id,
       taskId: task.id,
       role: "worker",
@@ -186,7 +186,7 @@ export class Kernel {
         push: this.options.push,
       });
 
-      const change = store.createChange({
+      const change = await store.createChange({
         projectId: project.id,
         taskId: task.id,
         branch: result.branch,
@@ -200,24 +200,32 @@ export class Kernel {
       });
 
       for (const [metricKey, value] of Object.entries(result.metrics)) {
-        store.recordMetricSample({ projectId: project.id, changeId: change.id, metricKey, value });
+        await store.recordMetricSample({
+          projectId: project.id,
+          changeId: change.id,
+          metricKey,
+          value,
+        });
       }
 
-      store.updateAgentRun(run.id, {
+      await store.updateAgentRun(run.id, {
         status: "succeeded",
         endedAt: this.clock.now(),
         changeId: change.id,
         sandboxId: result.handleId,
       });
-      this.emit(project.id, KernelEvents.workerDone, { taskId: task.id, changeId: change.id });
-      this.emit(project.id, KernelEvents.changeCreated, {
+      await this.emit(project.id, KernelEvents.workerDone, {
+        taskId: task.id,
+        changeId: change.id,
+      });
+      await this.emit(project.id, KernelEvents.changeCreated, {
         changeId: change.id,
         branch: change.branch,
         newMetrics: result.metrics,
       });
       return change;
     } catch (err) {
-      store.updateAgentRun(run.id, { status: "failed", endedAt: this.clock.now() });
+      await store.updateAgentRun(run.id, { status: "failed", endedAt: this.clock.now() });
       throw err;
     }
   }
@@ -225,9 +233,9 @@ export class Kernel {
   /** Review phase: run the reviewer agent, persist the Review, set in_review. */
   private async reviewPhase(project: Project, change: Change): Promise<Review> {
     const { store } = this.deps;
-    store.updateChange(change.id, { status: "in_review" });
+    await store.updateChange(change.id, { status: "in_review" });
 
-    const run = store.createAgentRun({
+    const run = await store.createAgentRun({
       projectId: project.id,
       taskId: change.taskId,
       changeId: change.id,
@@ -247,31 +255,36 @@ export class Kernel {
         workdir: this.options.workdir,
       });
 
-      store.updateAgentRun(run.id, {
+      await store.updateAgentRun(run.id, {
         status: "succeeded",
         endedAt: this.clock.now(),
         sandboxId: result.handleId,
       });
-      const review = store.createReview({
+      const review = await store.createReview({
         changeId: change.id,
         reviewerRunId: run.id,
         verdict: result.verdict,
         summary: result.summary,
         comments: result.comments,
       });
-      this.emit(project.id, KernelEvents.reviewDone, {
+      await this.emit(project.id, KernelEvents.reviewDone, {
         changeId: change.id,
         verdict: review.verdict,
       });
       return review;
     } catch (err) {
-      store.updateAgentRun(run.id, { status: "failed", endedAt: this.clock.now() });
+      await store.updateAgentRun(run.id, { status: "failed", endedAt: this.clock.now() });
       throw err;
     }
   }
 
   /** Apply the merge gate, update baseline on merge, loop feedback on changes. */
-  private applyGate(project: Project, task: Task, change: Change, review: Review): void {
+  private async applyGate(
+    project: Project,
+    task: Task,
+    change: Change,
+    review: Review,
+  ): Promise<void> {
     const { store } = this.deps;
     const comparison = compareMetrics(project.metrics, change.baseMetrics, change.newMetrics ?? {});
     const decision = evaluateGate({ review, comparison, policy: this.options.gatePolicy });
@@ -279,8 +292,8 @@ export class Kernel {
     if (decision.merge) {
       // The project baseline derives from the latest merged change, so merging
       // automatically raises the bar for the next cycle.
-      store.updateChange(change.id, { status: "merged" });
-      this.emit(project.id, KernelEvents.changeMerged, {
+      await store.updateChange(change.id, { status: "merged" });
+      await this.emit(project.id, KernelEvents.changeMerged, {
         changeId: change.id,
         reason: decision.reason,
         newMetrics: change.newMetrics,
@@ -289,24 +302,29 @@ export class Kernel {
     }
 
     const requestedChanges = review.verdict === "request_changes";
-    store.updateChange(change.id, { status: requestedChanges ? "rejected" : "abandoned" });
-    this.emit(project.id, KernelEvents.changeRejected, {
+    await store.updateChange(change.id, { status: requestedChanges ? "rejected" : "abandoned" });
+    await this.emit(project.id, KernelEvents.changeRejected, {
       changeId: change.id,
       reason: decision.reason,
     });
 
-    if (requestedChanges) this.enqueueFollowup(project, task, change, review);
+    if (requestedChanges) await this.enqueueFollowup(project, task, change, review);
   }
 
   /** Loop reviewer feedback back to a worker, capped per lineage. */
-  private enqueueFollowup(project: Project, task: Task, change: Change, review: Review): void {
+  private async enqueueFollowup(
+    project: Project,
+    task: Task,
+    change: Change,
+    review: Review,
+  ): Promise<void> {
     const { store } = this.deps;
-    if (lineageDepth(store, change) >= this.options.maxReviewIterations) {
+    if ((await lineageDepth(store, change)) >= this.options.maxReviewIterations) {
       this.log(`max review iterations reached for change ${change.id}; not enqueuing follow-up`);
       return;
     }
 
-    const followup = store.createTask({
+    const followup = await store.createTask({
       projectId: project.id,
       kind: "improve",
       title: `Address review feedback: ${change.title}`,
@@ -315,20 +333,20 @@ export class Kernel {
       source: "review",
       parentChangeId: change.id,
     });
-    this.emit(project.id, KernelEvents.followupEnqueued, {
+    await this.emit(project.id, KernelEvents.followupEnqueued, {
       taskId: followup.id,
       parentChangeId: change.id,
     });
   }
 
-  private requireProject(projectId: string): Project {
-    const project = this.deps.store.getProject(projectId);
+  private async requireProject(projectId: string): Promise<Project> {
+    const project = await this.deps.store.getProject(projectId);
     if (!project) throw new Error(`Project not found: ${projectId}`);
     return project;
   }
 
-  private emit(projectId: string, type: string, payload: unknown): void {
-    this.deps.store.appendEvent({ projectId, type, payload });
+  private async emit(projectId: string, type: string, payload: unknown): Promise<void> {
+    await this.deps.store.appendEvent({ projectId, type, payload });
   }
 }
 
@@ -337,11 +355,11 @@ export class Kernel {
  * change, or `undefined` before anything has merged. With no baseline the
  * metric portion of the gate passes (the first merged change sets the baseline).
  */
-export function currentBaseline(
+export async function currentBaseline(
   store: Store,
   projectId: string,
-): Record<string, number> | undefined {
-  const merged = store.listChanges(projectId).filter((c) => c.status === "merged");
+): Promise<Record<string, number> | undefined> {
+  const merged = (await store.listChanges(projectId)).filter((c) => c.status === "merged");
   return merged.length ? merged[merged.length - 1].newMetrics : undefined;
 }
 
@@ -350,14 +368,14 @@ export function currentBaseline(
  * the `parentChangeId` chain. A fresh (scheduler/idea) change is depth 0; each
  * follow-up adds one. Used to cap the feedback loop.
  */
-function lineageDepth(store: Store, change: Change): number {
+async function lineageDepth(store: Store, change: Change): Promise<number> {
   let depth = 0;
   let current: Change | undefined = change;
   while (current) {
-    const task = store.getTask(current.taskId);
+    const task = await store.getTask(current.taskId);
     if (!task?.parentChangeId) break;
     depth++;
-    current = store.getChange(task.parentChangeId);
+    current = await store.getChange(task.parentChangeId);
   }
   return depth;
 }
