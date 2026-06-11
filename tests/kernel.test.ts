@@ -7,21 +7,22 @@ import { test } from "node:test";
 import { type AgentInvoker, FakeAgentInvoker } from "../src/agent/index";
 import type { MetricSpec, Project, Review } from "../src/core/index";
 import {
-  Kernel,
-  type KernelOptions,
+  type CycleDeps,
   compareMetrics,
   ensureWork,
   evaluateGate,
   isReviewApproved,
   pickNextTask,
+  runCycle,
 } from "../src/kernel/index";
 import { LocalSandboxRunner } from "../src/sandbox/index";
 import { MemoryStore } from "../src/store/index";
 
 /**
- * Fully offline kernel tests: a real `MemoryStore` + `LocalSandboxRunner` plus
- * `FakeAgentInvoker`s against a throwaway git fixture. No model, no Daytona, no
- * network, no real sleeps.
+ * Fully offline tests of the PURE cycle phases — `runCycle` and the merge gate —
+ * with a real `MemoryStore` + `LocalSandboxRunner` and `FakeAgentInvoker`s
+ * against a throwaway git fixture. No Absurd, no model, no Daytona, no network.
+ * (The durable Absurd path is covered separately in `kernel.absurd.test.ts`.)
  */
 
 const MAXIMIZE: MetricSpec[] = [{ key: "score", label: "Score", direction: "maximize" }];
@@ -81,24 +82,31 @@ function reviewerWith(review: Pick<Review, "verdict" | "summary" | "comments">):
 }
 
 /**
- * Build a kernel wired for tests: zero idle delay and a relative workdir. The
- * worker pushes its branch to the fixture repo (a non-bare repo accepts a new,
- * non-checked-out branch) so the reviewer can clone it, mirroring production.
+ * Build cycle deps wired for tests: a relative workdir; the worker pushes its
+ * branch to the fixture repo (a non-bare repo accepts a new, non-checked-out
+ * branch) so the reviewer can clone it, mirroring production.
  */
-function makeKernel(
+function makeDeps(
   store: MemoryStore,
   workerInvoker: AgentInvoker,
   reviewerInvoker: AgentInvoker,
-  options: KernelOptions = {},
-): Kernel {
-  return new Kernel({
+  options: CycleDeps["options"] = {},
+): CycleDeps {
+  return {
     store,
     runner: new LocalSandboxRunner(),
     workerInvoker,
     reviewerInvoker,
     sandboxEnv: () => ({}),
-    options: { idleDelayMs: 0, workdir: "workspace", ...options },
-  });
+    options: { workdir: "workspace", ...options },
+  };
+}
+
+/** Seed a queued task and run one cycle against it. */
+async function seedAndRun(deps: CycleDeps, project: Project) {
+  const task = await ensureWork(deps.store, project);
+  assert.ok(task);
+  return runCycle(deps, project, task);
 }
 
 // ── merge-gate unit tests (pure) ────────────────────────────────────────────
@@ -185,20 +193,30 @@ test("ensureWork: seeds a task only when the queue is empty", async () => {
   assert.equal((await pickNextTask(store, project.id))?.id, seeded.id);
 });
 
-// ── kernel cycles (end to end, offline) ─────────────────────────────────────
+test("ensureWork: folds unconsumed pointers into the seed prompt", async () => {
+  const store = new MemoryStore();
+  const project = await store.createProject(fixtureProject("x"));
+  await store.createPointer({ projectId: project.id, body: "focus on docs" });
+  const seeded = await ensureWork(store, project);
+  assert.ok(seeded);
+  assert.match(seeded.prompt, /focus on docs/);
+});
+
+// ── cycle phases (end to end, offline) ──────────────────────────────────────
 
 test("runCycle happy path: improving change merges and updates baseline", async () => {
   const repo = await makeFixtureRepo("0.5");
   try {
     const store = new MemoryStore();
     const project = await store.createProject(fixtureProject(repo));
-    const kernel = makeKernel(
+    const deps = makeDeps(
       store,
       workerSetting(0.9),
       reviewerWith({ verdict: "approve", summary: "good", comments: [] }),
     );
 
-    await kernel.runCycle(project.id);
+    const outcome = await seedAndRun(deps, project);
+    assert.equal(outcome?.merged, true);
 
     const changes = await store.listChanges(project.id);
     assert.equal(changes.length, 1);
@@ -231,16 +249,16 @@ test("runCycle: regression is blocked even when the review approves", async () =
       newMetrics: { score: 0.8 },
     });
 
-    const kernel = makeKernel(
+    const deps = makeDeps(
       store,
       workerSetting(0.2), // worse than baseline 0.8
       reviewerWith({ verdict: "approve", summary: "lgtm", comments: [] }),
     );
-    await kernel.runCycle(project.id);
+    const outcome = await seedAndRun(deps, project);
+    assert.equal(outcome?.merged, false);
 
     const change = (await store.listChanges(project.id)).find((c) => c.branch !== "recurse/seed");
     assert.ok(change);
-    assert.notEqual(change.status, "merged");
     assert.equal(change.status, "abandoned");
     assert.ok((await store.listEvents(project.id)).some((e) => e.type === "change.rejected"));
   } finally {
@@ -253,18 +271,24 @@ test("runCycle: request_changes enqueues a capped follow-up loop", async () => {
   try {
     const store = new MemoryStore();
     const project = await store.createProject(fixtureProject(repo));
-    const kernel = makeKernel(
+    const deps = makeDeps(
       store,
       workerSetting(0.9),
       reviewerWith({ verdict: "request_changes", summary: "fix it", comments: [] }),
       { maxReviewIterations: 2 },
     );
 
-    // Drive one lineage to its cap: seed → follow-up → follow-up, then stop.
-    for (let i = 0; i < 3; i++) await kernel.runCycle(project.id);
+    // First cycle seeds + runs; each rejection returns a follow-up task id which
+    // we run next, mirroring what the durable layer does via `app.spawn`.
+    let outcome = await seedAndRun(deps, project);
+    let guard = 0;
+    while (outcome?.followupTaskId && guard++ < 5) {
+      const next = await store.getTask(outcome.followupTaskId);
+      assert.ok(next);
+      outcome = await runCycle(deps, project, next);
+    }
 
     const reviewTasks = (await store.listTasks(project.id)).filter((t) => t.source === "review");
-    assert.ok(reviewTasks.length > 0);
     assert.ok(reviewTasks.every((t) => t.parentChangeId));
     // Lineage capped at maxReviewIterations follow-ups.
     assert.equal(reviewTasks.length, 2);
@@ -273,20 +297,31 @@ test("runCycle: request_changes enqueues a capped follow-up loop", async () => {
   }
 });
 
-test("start: bounded by maxCycles and stoppable", async () => {
+test("runCycle: a failing worker marks the task failed and emits cycle.error", async () => {
   const repo = await makeFixtureRepo("0.5");
   try {
     const store = new MemoryStore();
-    const project = await store.createProject(fixtureProject(repo, 1));
-    const kernel = makeKernel(
+    const project = await store.createProject(fixtureProject(repo));
+    // Worker fake that writes a non-numeric score → the eval emits invalid
+    // metric JSON and the worker phase throws.
+    const deps = makeDeps(
       store,
-      workerSetting(0.9),
+      FakeAgentInvoker(async (handle, opts) => {
+        await handle.exec("git config user.email a@b.c && git config user.name test", {
+          cwd: opts.cwd,
+        });
+        await handle.writeFile(`${opts.cwd}/score.txt`, "not-a-number\n");
+        await handle.exec('git add -A && git commit -m "break eval"', { cwd: opts.cwd });
+      }),
       reviewerWith({ verdict: "approve", summary: "good", comments: [] }),
     );
 
-    await kernel.start(project.id, { maxCycles: 2 });
-    // Two cycles ran sequentially; the first merged and set the baseline.
-    assert.equal((await store.listChanges(project.id)).length, 2);
+    const task = await ensureWork(store, project);
+    assert.ok(task);
+    const outcome = await runCycle(deps, project, task);
+    assert.equal(outcome, undefined);
+    assert.equal((await store.getTask(task.id))?.status, "failed");
+    assert.ok((await store.listEvents(project.id)).some((e) => e.type === "cycle.error"));
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
