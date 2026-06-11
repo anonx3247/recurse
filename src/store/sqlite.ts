@@ -132,6 +132,16 @@ export class SqliteStore implements Store {
     this.db.prepare(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`).run(row);
   }
 
+  /** UPDATE every column of `entity` (keyed by `id`) in `table`. */
+  private update(table: string, entity: Row): void {
+    const row = this.encode(table, entity);
+    const assignments = Object.keys(row)
+      .filter((k) => k !== "id")
+      .map((k) => `${k} = @${k}`)
+      .join(", ");
+    this.db.prepare(`UPDATE ${table} SET ${assignments} WHERE id = @id`).run(row);
+  }
+
   createProject(input: NewProject): Project {
     const project: Project = { ...input, id: randomUUID(), createdAt: this.now() };
     this.insert("projects", project as unknown as Row);
@@ -197,12 +207,7 @@ export class SqliteStore implements Store {
     const existing = this.getChange(id);
     if (!existing) throw new Error(`Change not found: ${id}`);
     const updated = { ...existing, ...patch };
-    const row = this.encode("changes", updated as unknown as Row);
-    const assignments = Object.keys(row)
-      .filter((k) => k !== "id")
-      .map((k) => `${k} = @${k}`)
-      .join(", ");
-    this.db.prepare(`UPDATE changes SET ${assignments} WHERE id = @id`).run(row);
+    this.update("changes", updated as unknown as Row);
     return updated;
   }
 
@@ -237,12 +242,7 @@ export class SqliteStore implements Store {
     const decoded = this.decode<AgentRun>("agent_runs", existing);
     if (!decoded) throw new Error(`Agent run not found: ${id}`);
     const updated = { ...decoded, ...patch };
-    const row = this.encode("agent_runs", updated as unknown as Row);
-    const assignments = Object.keys(row)
-      .filter((k) => k !== "id")
-      .map((k) => `${k} = @${k}`)
-      .join(", ");
-    this.db.prepare(`UPDATE agent_runs SET ${assignments} WHERE id = @id`).run(row);
+    this.update("agent_runs", updated as unknown as Row);
     return updated;
   }
 

@@ -3,8 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { MemoryStore, type Store } from "../src/store/index.js";
-import { SqliteStore } from "../src/store/index.js";
+import { MemoryStore, SqliteStore, type Store } from "../src/store/index.js";
 
 /** Build a project with metrics and exercise the full store surface. */
 function runSuite(name: string, makeStore: () => Store) {
