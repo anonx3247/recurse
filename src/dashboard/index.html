@@ -590,10 +590,9 @@
         try {
           const s = await api(`/api/state?projectId=${projectId}`);
           if (!s.project) return;
+          const objective = s.project.objective || "";
           const obj = document.getElementById("objective");
-          if (obj.textContent !== (s.project.objective || "")) {
-            obj.textContent = s.project.objective || "";
-          }
+          if (obj.textContent !== objective) obj.textContent = objective;
           renderCounts(s.taskCounts);
           renderChanges(s.changes);
           renderRuns(s.inFlightRuns);
