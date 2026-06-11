@@ -14,7 +14,7 @@
  */
 
 import { setTimeout as delay } from "node:timers/promises";
-import { type AgentInvoker, runReviewer, runWorker } from "../agent/index.js";
+import { type AgentInvoker, type PushBranch, runReviewer, runWorker } from "../agent/index.js";
 import type { Change, Project, Review, Task } from "../core/types.js";
 import type { SandboxRunner } from "../sandbox/index.js";
 import type { Store } from "../store/index.js";
@@ -69,6 +69,8 @@ export interface KernelOptions {
   snapshot?: string;
   /** Repo checkout dir inside the sandbox. Defaults to the runner's default. */
   workdir?: string;
+  /** How a worker pushes its branch; defaults to a real `git push`. Tests no-op it. */
+  push?: PushBranch;
 }
 
 /** Event-log type strings the kernel emits (the dashboard keys off these). */
@@ -99,6 +101,7 @@ export class Kernel {
       idleDelayMs: deps.options?.idleDelayMs ?? 250,
       snapshot: deps.options?.snapshot,
       workdir: deps.options?.workdir,
+      push: deps.options?.push,
     };
   }
 
@@ -186,6 +189,7 @@ export class Kernel {
         env: this.deps.sandboxEnv(),
         snapshot: this.options.snapshot,
         workdir: this.options.workdir,
+        push: this.options.push,
       });
 
       const change = store.createChange({

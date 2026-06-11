@@ -26,9 +26,7 @@ export function ensureWork(store: Store, project: Project): Task | undefined {
     projectId: project.id,
     kind: "improve",
     title: "Scheduled improvement",
-    prompt:
-      `Make one focused improvement toward: ${project.objective}. ` +
-      "Prefer the highest-leverage change and keep the diff small.",
+    prompt: `Make one focused improvement toward: ${project.objective}. Prefer the highest-leverage change and keep the diff small.`,
     priority: 0,
     source: "scheduler",
   });
