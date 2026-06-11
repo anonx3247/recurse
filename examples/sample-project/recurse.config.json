@@ -1,0 +1,22 @@
+{
+  "name": "sample-ts-lib",
+  "repoUrl": "https://github.com/example/sample-ts-lib.git",
+  "defaultBranch": "main",
+  "objective": "increase test coverage and code quality",
+  "evalCommand": "node eval.mjs",
+  "metrics": [
+    {
+      "key": "coverage",
+      "label": "Test coverage",
+      "direction": "maximize",
+      "unit": "ratio"
+    },
+    {
+      "key": "lintErrors",
+      "label": "Lint errors",
+      "direction": "minimize"
+    }
+  ],
+  "concurrency": 2,
+  "ideaIntervalMinutes": 60
+}
