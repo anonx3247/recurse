@@ -123,10 +123,13 @@ export class PgStore implements Store {
   }
 
   async updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
-    await this.db.update(schema.tasks).set({ status }).where(eq(schema.tasks.id, id));
-    const task = await this.getTask(id);
-    if (!task) throw new Error(`Task not found: ${id}`);
-    return task;
+    const [row] = await this.db
+      .update(schema.tasks)
+      .set({ status })
+      .where(eq(schema.tasks.id, id))
+      .returning();
+    if (!row) throw new Error(`Task not found: ${id}`);
+    return clean<Task>(row);
   }
 
   async listTasks(projectId: string, filter?: { status?: TaskStatus }): Promise<Task[]> {
@@ -150,10 +153,13 @@ export class PgStore implements Store {
   }
 
   async updateChange(id: string, patch: Partial<NewChange>): Promise<Change> {
-    await this.db.update(schema.changes).set(patch).where(eq(schema.changes.id, id));
-    const change = await this.getChange(id);
-    if (!change) throw new Error(`Change not found: ${id}`);
-    return change;
+    const [row] = await this.db
+      .update(schema.changes)
+      .set(patch)
+      .where(eq(schema.changes.id, id))
+      .returning();
+    if (!row) throw new Error(`Change not found: ${id}`);
+    return clean<Change>(row);
   }
 
   async listChanges(projectId: string): Promise<Change[]> {
@@ -189,8 +195,11 @@ export class PgStore implements Store {
   }
 
   async updateAgentRun(id: string, patch: Partial<NewAgentRun>): Promise<AgentRun> {
-    await this.db.update(schema.agentRuns).set(patch).where(eq(schema.agentRuns.id, id));
-    const [row] = await this.db.select().from(schema.agentRuns).where(eq(schema.agentRuns.id, id));
+    const [row] = await this.db
+      .update(schema.agentRuns)
+      .set(patch)
+      .where(eq(schema.agentRuns.id, id))
+      .returning();
     if (!row) throw new Error(`Agent run not found: ${id}`);
     return clean<AgentRun>(row);
   }
@@ -241,11 +250,11 @@ export class PgStore implements Store {
   }
 
   async answerQuestion(id: string, answer: string): Promise<Question> {
-    await this.db
+    const [row] = await this.db
       .update(schema.questions)
       .set({ answer, status: "answered", answeredAt: this.now() })
-      .where(eq(schema.questions.id, id));
-    const [row] = await this.db.select().from(schema.questions).where(eq(schema.questions.id, id));
+      .where(eq(schema.questions.id, id))
+      .returning();
     if (!row) throw new Error(`Question not found: ${id}`);
     return clean<Question>(row);
   }
