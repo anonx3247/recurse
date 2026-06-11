@@ -11,7 +11,7 @@
  *   if the queue is empty, and re-spawns itself — the never-idle guarantee.
  */
 
-import type { Absurd, TaskContext } from "absurd-sdk";
+import type { Absurd } from "absurd-sdk";
 import type { Project } from "../core/types";
 import { type CycleDeps, KernelEvents, runGate, runReviewPhase, runWorkerPhase } from "./phases";
 import { ensureWork } from "./scheduler";
@@ -165,6 +165,3 @@ export async function spawnInitialWork(
     { idempotencyKey: `scheduler:${project.id}` },
   );
 }
-
-/** Re-export for callers that wrap long sandbox ops with heartbeats. */
-export type { TaskContext };
