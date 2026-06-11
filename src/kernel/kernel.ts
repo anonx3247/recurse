@@ -18,13 +18,7 @@ import { type AgentInvoker, type PushBranch, runReviewer, runWorker } from "../a
 import type { Change, Project, Review, Task } from "../core/types.js";
 import type { SandboxRunner } from "../sandbox/index.js";
 import type { Store } from "../store/index.js";
-import {
-  type GatePolicy,
-  compareMetrics,
-  defaultGatePolicy,
-  evaluateGate,
-  isReviewApproved,
-} from "./mergeGate.js";
+import { type GatePolicy, compareMetrics, defaultGatePolicy, evaluateGate } from "./mergeGate.js";
 import { ensureWork, pickNextTask } from "./scheduler.js";
 
 /** Wall-clock + sleep seam, injectable so tests stay instant and deterministic. */
@@ -281,8 +275,6 @@ export class Kernel {
     const { store } = this.deps;
     const comparison = compareMetrics(project.metrics, change.baseMetrics, change.newMetrics ?? {});
     const decision = evaluateGate({ review, comparison, policy: this.options.gatePolicy });
-
-    store.updateChange(change.id, { status: isReviewApproved(review) ? "approved" : "rejected" });
 
     if (decision.merge) {
       // The project baseline derives from the latest merged change, so merging
