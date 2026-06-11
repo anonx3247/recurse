@@ -67,8 +67,11 @@ export async function runEval(
  * Return the source text of the last top-level `{...}` object in `text`, or
  * `undefined` if there is none. Scans forward tracking brace depth (ignoring
  * braces inside strings) and remembers the last balanced top-level object.
+ *
+ * Exported so other agent runners (e.g. the ideator) can recover a JSON object
+ * from possibly-noisy model output with the same prose-tolerant strategy.
  */
-function lastJsonObject(text: string): string | undefined {
+export function lastJsonObject(text: string): string | undefined {
   let depth = 0;
   let start = -1;
   let inString = false;
