@@ -11,7 +11,15 @@
  */
 
 import { setTimeout as delay } from "node:timers/promises";
-import { type AgentInvoker, type PushBranch, runReviewer, runWorker } from "../agent/index";
+import {
+  type AgentInvoker,
+  type IntegrateBranch,
+  type IntegrateMode,
+  type PushBranch,
+  integratorForMode,
+  runReviewer,
+  runWorker,
+} from "../agent/index";
 import type { Change, Project, Review, Task } from "../core/types";
 import type { SandboxRunner } from "../sandbox/index";
 import type { Store } from "../store/index";
@@ -44,6 +52,14 @@ export interface PhaseOptions {
   workdir?: string;
   /** How a worker pushes its branch; defaults to a real `git push`. Tests no-op it. */
   push?: PushBranch;
+  /**
+   * How a merged change's branch is integrated into `defaultBranch`. Defaults
+   * to the built-in strategy chosen by {@link integrateMode} (a real git
+   * merge-to-default-branch push). Tests inject a no-op/spy.
+   */
+  integrate?: IntegrateBranch;
+  /** Built-in integration strategy when {@link integrate} is not supplied. */
+  integrateMode?: IntegrateMode;
 }
 
 /** Everything a cycle needs, injected so it runs offline or durably. */
@@ -68,6 +84,7 @@ export const KernelEvents = {
   changeCreated: "change.created",
   reviewDone: "review.done",
   changeMerged: "change.merged",
+  branchIntegrated: "branch.integrated",
   changeRejected: "change.rejected",
   followupEnqueued: "followup.enqueued",
   cycleError: "cycle.error",
@@ -252,6 +269,9 @@ export async function runGate(
     return { merged: true, reason: decision.reason };
   }
 
+  // A non-merging gate must never touch the target repo.
+
+
   const requestedChanges = review.verdict === "request_changes";
   await store.updateChange(change.id, { status: requestedChanges ? "rejected" : "abandoned" });
   await emit(store, project.id, KernelEvents.changeRejected, {
@@ -284,6 +304,45 @@ export async function runGate(
 }
 
 /**
+ * Integrate a merged change's branch into the project's `defaultBranch` in the
+ * real target repo (see ARCHITECTURE.md "Merge gate"). Runs ONLY for changes
+ * the gate merged; the durable layer wraps this in its own checkpoint step.
+ *
+ * Idempotent: integration is skipped if a `branch.integrated` event already
+ * exists for the change, so re-running the step (a crash/retry, or a replayed
+ * `ctx.step`) never lands the branch twice. Returns whether it integrated.
+ */
+export async function integrateChange(
+  deps: CycleDeps,
+  project: Project,
+  change: Change,
+): Promise<boolean> {
+  const { store } = deps;
+  const events = await store.listEvents(project.id);
+  const already = events.some(
+    (e) =>
+      e.type === KernelEvents.branchIntegrated &&
+      (e.payload as { changeId?: string } | null)?.changeId === change.id,
+  );
+  if (already) return false;
+
+  const integrate = deps.options?.integrate ?? integratorForMode(deps.options?.integrateMode);
+  await integrate({
+    runner: deps.runner,
+    project,
+    branch: change.branch,
+    env: deps.sandboxEnv(),
+    snapshot: deps.options?.snapshot,
+    workdir: deps.options?.workdir,
+  });
+  await emit(store, project.id, KernelEvents.branchIntegrated, {
+    changeId: change.id,
+    branch: change.branch,
+  });
+  return true;
+}
+
+/**
  * Run one full cycle in-process (worker → review → gate), persisting state and
  * events and handling task status. Used directly by offline tests; the durable
  * Absurd handler runs the same phases wrapped in checkpoint steps instead.
@@ -302,6 +361,7 @@ export async function runCycle(
     const change = await runWorkerPhase(deps, project, task);
     const review = await runReviewPhase(deps, project, change);
     const outcome = await runGate(deps, project, task, change, review);
+    if (outcome.merged) await integrateChange(deps, project, change);
     await store.updateTaskStatus(task.id, "done");
     return outcome;
   } catch (err) {

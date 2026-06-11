@@ -13,7 +13,14 @@
 
 import type { Absurd } from "absurd-sdk";
 import type { Project } from "../core/types";
-import { type CycleDeps, KernelEvents, runGate, runReviewPhase, runWorkerPhase } from "./phases";
+import {
+  type CycleDeps,
+  KernelEvents,
+  integrateChange,
+  runGate,
+  runReviewPhase,
+  runWorkerPhase,
+} from "./phases";
 import { ensureWork } from "./scheduler";
 
 /** Absurd task names. */
@@ -82,6 +89,16 @@ export function registerTasks(
       if (!review) throw new Error(`Review not found after review step: ${reviewId}`);
 
       const outcome = await ctx.step("gate", () => runGate(deps, project, task, change, review));
+
+      // Integration is its own checkpoint: marking the change merged (the gate
+      // step) is durable, while landing the branch in the target repo retries
+      // independently and is idempotent (guarded by the branch.integrated event).
+      if (outcome.merged) {
+        await ctx.step("integrate", async () => {
+          await ctx.heartbeat(options.heartbeatSeconds);
+          return integrateChange(deps, project, change);
+        });
+      }
 
       if (outcome.followupTaskId) {
         const followupTaskId = outcome.followupTaskId;
