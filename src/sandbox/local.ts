@@ -9,7 +9,7 @@
  */
 
 import { exec as execCb } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
@@ -24,21 +24,21 @@ import type {
 const execAsync = promisify(execCb);
 
 class LocalSandboxHandle implements SandboxHandle {
+  /** The sandbox's temp directory doubles as its opaque id. */
   constructor(
     readonly id: string,
-    private readonly root: string,
     private readonly baseEnv: Record<string, string>,
   ) {}
 
   /** Resolve a sandbox-relative path against the sandbox root. */
   private resolve(path: string): string {
-    return isAbsolute(path) ? path : join(this.root, path);
+    return isAbsolute(path) ? path : join(this.id, path);
   }
 
   async exec(command: string, opts: ExecOptions = {}): Promise<ExecResult> {
     try {
       const { stdout, stderr } = await execAsync(command, {
-        cwd: opts.cwd ? this.resolve(opts.cwd) : this.root,
+        cwd: opts.cwd ? this.resolve(opts.cwd) : this.id,
         env: { ...process.env, ...this.baseEnv, ...opts.env },
         timeout: opts.timeoutMs,
         encoding: "utf8",
@@ -79,7 +79,7 @@ class LocalSandboxHandle implements SandboxHandle {
   }
 
   async dispose(): Promise<void> {
-    await rm(this.root, { recursive: true, force: true });
+    await rm(this.id, { recursive: true, force: true });
   }
 }
 
@@ -88,7 +88,6 @@ export class LocalSandboxRunner implements SandboxRunner {
 
   async create(opts: CreateSandboxOptions = {}): Promise<SandboxHandle> {
     const root = await mkdtemp(join(tmpdir(), "recurse-sandbox-"));
-    const id = root.split("recurse-sandbox-").pop() ?? root;
-    return new LocalSandboxHandle(`local-${id}`, root, opts.envVars ?? {});
+    return new LocalSandboxHandle(root, opts.envVars ?? {});
   }
 }
