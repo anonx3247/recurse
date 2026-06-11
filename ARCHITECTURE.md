@@ -72,11 +72,15 @@ human-in-the-loop: the kernel can `awaitEvent` on a `question.answered` event wh
 continuing to drain other tasks. Absurd needs only a Postgres database and its
 single `absurd.sql` schema — no broker or coordination service.
 
-Note the storage split: the **durable queue/workflow state** lives in Postgres (via
-Absurd), while recurse's **domain state** (projects, changes, reviews, metrics,
-events) lives in the `Store` (SQLite via drizzle ORM today; the schema is portable
-to Postgres if we later consolidate on one database). Actual Absurd integration
-lands in the kernel-loop PR.
+**One database for everything.** recurse consolidates on a single Postgres
+instance: the `Store` (projects, changes, reviews, metrics, events) and Absurd's
+durable queue/workflow state share the same database, so domain state and in-flight
+work stay transactionally consistent and there is one thing to operate. The store
+is Postgres via drizzle ORM (`pg` / node-postgres, from `DATABASE_URL`; Neon-
+compatible). Tests run fully offline against [PGlite](https://pglite.dev/), a real
+Postgres compiled to WASM that runs in-process — no external server or service
+containers. Actual Absurd integration lands in the kernel-loop PR (sharing this
+same Postgres).
 
 ## Agents
 
@@ -144,7 +148,7 @@ A minimal web dashboard reads straight from the store (no business logic):
                        ▼               ▼               ▼
               ┌────────────────┐  ┌─────────┐   ┌──────────────┐
               │  Sandbox runs  │  │  Store  │   │  Scheduler   │
-              │  (Daytona OCI) │  │ (sqlite)│   │  (ideator)   │
+              │  (Daytona OCI) │  │(postgres)│  │  (ideator)   │
               └───────┬────────┘  └────┬────┘   └──────────────┘
                       │ pi agent       │ reads
         ┌─────────────┼──────────┐     ▼
@@ -175,7 +179,8 @@ The system is delivered as a stack of PRs. Later subagents: find your piece here
 
 1. **Scaffold + core domain model & state store** _(this PR)_ — project setup,
    this architecture doc, `src/core` types + config schema, `src/store`
-   (interface + sqlite-via-drizzle + memory), example config, tests, CI.
+   (interface + Postgres-via-drizzle + in-memory), example config, offline tests
+   (PGlite) + CI.
 2. **Sandbox runner** — Daytona OCI integration: create/destroy sandboxes from the
    prebaked snapshot, stream logs, run commands inside.
 3. **Agent runner** — drive `pi` in print/RPC mode inside a sandbox for each role

@@ -1,6 +1,4 @@
 node_modules/
 dist/
-*.sqlite
-*.db
 .env
 .recurse-data/
