@@ -9,7 +9,7 @@ import type {
   Review,
   Task,
   TaskStatus,
-} from "../core/types.js";
+} from "../core/types";
 
 /** Inputs are entities without store-managed fields (id, timestamps). */
 export type NewProject = Omit<Project, "id" | "createdAt">;

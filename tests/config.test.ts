@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { loadConfig, parseConfig } from "../src/core/config.js";
+import { loadConfig, parseConfig } from "../src/core/config";
 
 const sampleConfigPath = fileURLToPath(
   new URL("../examples/sample-project/recurse.config.json", import.meta.url),

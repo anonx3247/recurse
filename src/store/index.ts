@@ -1,3 +1,3 @@
-export * from "./store.js";
-export { MemoryStore } from "./memory.js";
-export { SqliteStore } from "./sqlite.js";
+export * from "./store";
+export { MemoryStore } from "./memory";
+export { SqliteStore } from "./sqlite";

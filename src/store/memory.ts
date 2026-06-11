@@ -10,7 +10,7 @@ import type {
   Review,
   Task,
   TaskStatus,
-} from "../core/types.js";
+} from "../core/types";
 import type {
   NewAgentRun,
   NewChange,
@@ -22,7 +22,7 @@ import type {
   NewReview,
   NewTask,
   Store,
-} from "./store.js";
+} from "./store";
 
 /** In-memory {@link Store} implementation for tests and ephemeral runs. */
 export class MemoryStore implements Store {
