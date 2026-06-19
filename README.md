@@ -44,3 +44,56 @@ task resumes. If SSE drops, the page falls back to polling `/api/events`.
 
 Flags: `--port` (default `7777`), `--host` (default `127.0.0.1`). The database
 comes from `DATABASE_URL` (required).
+
+## Running a live smoke cycle
+
+`npm run smoke` runs **one real improvement cycle end-to-end** against real
+Daytona + real `pi` + a real model. It proves the whole vertical slice — sandbox
+→ worker (`pi`) → eval → reviewer → merge gate — actually works, without making
+CI depend on any of it.
+
+It is **fully opt-in and env-gated**: with no credentials it prints how to run it
+and exits `0`, so it never breaks CI. It is **not** run in CI.
+
+### The sample target
+
+The cycle improves a tiny committed repo, [`examples/smoke-target`](./examples/smoke-target):
+`subtract()` has a deliberate bug so one of its tests fails. Its `evalCommand`
+(`node eval.mjs`) runs the tests and emits the eval-output contract
+`{ "passRate": <ratio> }` — `0.5` while buggy, `1.0` once fixed. The worker agent
+is asked to fix the implementation (without touching the tests); the reviewer
+reviews the change; the merge gate lands it only if `passRate` improves/holds and
+the review approves.
+
+### The snapshot
+
+Agents start from a prebaked Daytona snapshot with `node` (>=20), `git`, and the
+`pi` CLI. Its spec is committed at [`sandbox/Dockerfile`](./sandbox/Dockerfile).
+`npm run smoke` calls `ensureSnapshot` (`src/sandbox/snapshot.ts`), which reuses
+the snapshot if it already exists or builds it from that Dockerfile via the
+Daytona SDK the first time. The name defaults to `recurse-pi-node20`; override it
+with `RECURSE_SNAPSHOT`.
+
+### Running it
+
+```bash
+DAYTONA_API_KEY=…  \
+ANTHROPIC_API_KEY=…  \
+npm run smoke
+```
+
+Required env:
+
+- `DAYTONA_API_KEY` — provisions the sandbox (optional `DAYTONA_API_URL`,
+  `DAYTONA_TARGET`).
+- `ANTHROPIC_API_KEY` — the model key `pi` uses inside the sandbox.
+
+Optional env:
+
+- `RECURSE_SNAPSHOT` — snapshot name to ensure/use (default `recurse-pi-node20`).
+- `RECURSE_PI_MODEL` — passed to `pi --model`; otherwise `pi`'s default model.
+
+The smoke provisions a single sandbox, seeds the sample into a bare `file://` git
+origin inside it (so the worker and reviewer can clone/push), drives the existing
+kernel `runCycle` (no business logic is re-implemented), and prints a summary of
+the resulting Change, its before/after metrics, and the review verdict.
